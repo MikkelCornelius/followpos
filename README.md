@@ -14,6 +14,8 @@ The project started as a feature for [llama.cpp](https://github.com/ggml-org/lla
 
 ## How it works
 
+The algorithms implemented are based on the teachings of [Dragon Book](https://faculty.sist.shanghaitech.edu.cn/faculty/songfu/cav/Dragon-book.pdf), particularly chapter 3.9. The regex to DFA algorithm is refered to as `followpos` but is also known under the name `Glushkov`.
+
 The DFA is constructed directly from the syntax tree of the augmented pattern `(r)#`, using the `nullable`, `firstpos`, `lastpos` and `followpos` functions (the algorithm from the "Dragon Book"). No intermediate NFA is built. A DFA state is a set of positions in the pattern, and a state is accepting if it contains the position of the `#` end marker.
 
 ## Building and testing
