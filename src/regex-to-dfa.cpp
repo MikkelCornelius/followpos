@@ -2,13 +2,104 @@
 
 #include <stdexcept>
 
+// Clean up memory from syntax tree
+void free_tree(Node* node) {
+    if (node == nullptr) return;
+    free_tree(node->left_child);
+    free_tree(node->right_child);
+    delete node;
+}
+
+Node* augment_pattern(Node* old_root, std::vector<char32_t>* symbol_at) {
+    Node* special = new Node;
+    special->type = REGEX_NODE_SYMBOL;
+    special->value = '#';
+    special->position = symbol_at->size();
+
+    Node* root = new Node;
+    root->type = REGEX_NODE_CONCATENATION;
+    root->left_child = std::move(old_root);
+    root->right_child = std::move(special);
+
+    symbol_at->push_back('#');
+    return root;
+}
+
 static void desugar(std::string & pattern) {
     throw std::logic_error("feature not implemented");
 }
 
-Node regex_parse(std::string & pattern, std::vector<char32_t> * symbol_at) {
-    desugar(pattern);
-    throw std::logic_error("feature not implemented");
+Node* regex_parse(std::string & pattern, std::vector<char32_t> * symbol_at) {
+    //desugar(pattern);
+
+    Node* current_node;
+    Node* new_leaf;
+    Node* next_node = nullptr;
+    next_node = new Node;
+
+    if (pattern.empty())  {
+        next_node->type = REGEX_NODE_EPSILON;
+        return next_node;
+    }
+
+    // Syntax tree is initialized with a symbol. Start by handling cases where first character is not a literal symbol
+    if (pattern[0]=='(') {
+        std::string sub_pattern = pattern.substr(1, pattern.find(')') - 1);
+        current_node = regex_parse(sub_pattern, symbol_at);
+        next_node->left_child = current_node;
+    } else if (pattern[0]=='\\') {
+        throw std::logic_error("feature not implemented");
+    }
+
+    next_node->type = REGEX_NODE_SYMBOL;
+    next_node->value = pattern[0];
+    next_node->position = 0;
+    symbol_at->push_back(pattern[0]);
+    int pos = 0;
+    for (int i = 1; i < pattern.length(); i++) { //start at index 1 insted of 0 to get operator
+        current_node = next_node;
+        switch (pattern[i]) {
+            case '|':
+                throw std::logic_error("feature not implemented");
+                break;
+
+            case '*':
+                throw std::logic_error("feature not implemented");
+                break;
+            
+            case '(':
+                throw std::logic_error("feature not implemented");
+                break;
+
+            case '\0': //end of pattern. Just breat out of for loop
+                break;
+
+            default: //symbol
+                if (pattern[i+1]=='|' || pattern[i+1]=='*') {
+                    throw std::logic_error("feature not implemented");
+                    i++;
+
+                } else { //concatenation
+                    if (pattern[i+1]=='(') {
+                        throw std::logic_error("feature not implemented");
+                    } else {
+                        new_leaf = new Node;
+                        new_leaf->type = REGEX_NODE_SYMBOL;
+                        new_leaf->value = pattern[i];
+                        new_leaf->position = pos++;
+                        symbol_at->push_back(pattern[i]);
+
+                        next_node = new Node;
+                        next_node->type = REGEX_NODE_CONCATENATION;
+                        next_node->left_child = current_node;
+                        next_node->right_child = new_leaf;
+                    }
+                }
+                break;
+        }
+    }
+
+    return next_node;
 }
 
 void regex_annotate(Node * node, std::vector<std::set<int>> * followpos) {
@@ -25,21 +116,21 @@ void regex_annotate(Node * node, std::vector<std::set<int>> * followpos) {
             }
         case REGEX_NODE_CONCATENATION:
             {
-                regex_annotate(&node->children[0], followpos);
-                regex_annotate(&node->children[1], followpos);
+                regex_annotate(node->left_child, followpos);
+                regex_annotate(node->right_child, followpos);
                 throw std::logic_error("feature not implemented");
                 break;
             }
         case REGEX_NODE_ALTERNATION:
             {
-                regex_annotate(&node->children[0], followpos);
-                regex_annotate(&node->children[1], followpos);
+                regex_annotate(node->left_child, followpos);
+                regex_annotate(node->right_child, followpos);
                 throw std::logic_error("feature not implemented");
                 break;
             }
         case REGEX_NODE_REPETITION:
             {
-                regex_annotate(&node->children[0], followpos);
+                regex_annotate(node->left_child, followpos);
                 throw std::logic_error("feature not implemented");
                 break;
             }
@@ -49,20 +140,22 @@ void regex_annotate(Node * node, std::vector<std::set<int>> * followpos) {
 DFA regex_to_dfa(std::string pattern) {
     // Parse the pattern, and return a syntax tree of the augmented pattern (r)# aswell as a lookup table `symbol_at`
     std::vector<char32_t> symbol_at;
-    Node root = regex_parse(pattern, &symbol_at);
+    symbol_at.reserve(pattern.size());
+    Node* tree = regex_parse(pattern, &symbol_at);
+    Node* root = augment_pattern(tree, &symbol_at);
 
     // Define an alphabet to only contain terminal symbols found in the regex
     std::set<char32_t> alphabet(symbol_at.begin(), symbol_at.end());
 
     // Calculate the functions `nullable`, `firstpos`, `lastpos` and `followpos`
     std::vector<std::set<int>> followpos(symbol_at.size());
-    regex_annotate(&root, &followpos);
+    regex_annotate(root, &followpos);
 
     // Initialize with Dstates only containing firstpos(root)
-    std::set<std::set<int>>   dstates = { root.firstpos };
+    std::set<std::set<int>>   dstates = { root->firstpos };
     Transitions               dtran;
     std::queue<std::set<int>> q;
-    q.push(root.firstpos);
+    q.push(root->firstpos);
 
     // Run algorithm
     std::set<int> state;
@@ -94,6 +187,8 @@ DFA regex_to_dfa(std::string pattern) {
             dtran[state].push_back({ next_state, symbol });
         }
     }
+
+    free_tree(root); //syntax tree desctructor
 
     return { 0 };
 }
