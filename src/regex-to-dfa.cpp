@@ -77,7 +77,9 @@ Node * regex_parse(std::string & pattern, std::vector<char32_t> * symbol_at) {
                 break;
 
             case '*':
-                throw std::logic_error("feature not implemented");
+                next_node              = new Node;
+                next_node->type        = REGEX_NODE_REPETITION;
+                next_node->left_child  = current_node;
                 break;
 
             case '(':
