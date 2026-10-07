@@ -108,9 +108,13 @@ static void test_parse_symbol()     { check_parse("a",   "(a.#)",         { 'a',
 static void test_parse_concat()     { check_parse("ab",  "((a.b).#)",     { 'a', 'b', '#' }); }
 static void test_parse_repeat_sym() { check_parse("aa",  "((a.a).#)",     { 'a', 'a', '#' }); }
 static void test_parse_alt()        { check_parse("a|b", "((a|b).#)",     { 'a', 'b', '#' }); }
+static void test_parse_cat_alt()    { check_parse("aa|b", "(a.(a|b).#)",     { 'a', 'a', 'b', '#' }); }
 static void test_parse_star()       { check_parse("a*",  "((a*).#)",      { 'a', '#' }); }
 static void test_parse_cat_star()   { check_parse("ab*", "((a.(b*)).#)",  { 'a', 'b', '#' }); }
+static void test_parse_precedence() { check_parse("aa|ab*", "(((a.a)|(a.(b*))).#)", { 'a', 'a', 'a', 'b', '#' }); }
 static void test_parse_group()      { check_parse("(a|b)*", "(((a|b)*).#)", { 'a', 'b', '#' }); }
+static void test_parse_group_cat()      { check_parse("(ab)(ab)", "((a.b).(a.b)).#)", { 'a', 'b', 'a', 'b', '#' }); }
+static void test_parse_full()       { check_parse("(a|b)*abb", "((((((a|b)*).a).b).b).#)", { 'a', 'b', 'a', 'b', 'b', '#' }); }
 
 // ---------------------------------------------------------------------------
 // Annotation tests on hand-built trees (independent of the parser)
@@ -246,9 +250,13 @@ int main() {
     run("parse_concat", test_parse_concat);
     run("parse_repeat_sym", test_parse_repeat_sym);
     run("parse_alt", test_parse_alt);
+    run("parse_cat_alt", test_parse_cat_alt);
     run("parse_star", test_parse_star);
     run("parse_cat_star", test_parse_cat_star);
+    run("parse_precedence", test_parse_precedence);
     run("parse_group", test_parse_group);
+    run("parse_group_cat", test_parse_group_cat);
+    run("parse_full", test_parse_full);
 
     run("annotate_epsilon", test_annotate_epsilon);
     run("annotate_alternation", test_annotate_alternation);
