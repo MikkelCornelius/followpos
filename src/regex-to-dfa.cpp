@@ -3,22 +3,24 @@
 #include <stdexcept>
 
 // Clean up memory from syntax tree
-void free_tree(Node* node) {
-    if (node == nullptr) return;
+void free_tree(Node * node) {
+    if (node == nullptr) {
+        return;
+    }
     free_tree(node->left_child);
     free_tree(node->right_child);
     delete node;
 }
 
-Node* augment_pattern(Node* old_root, std::vector<char32_t>* symbol_at) {
-    Node* special = new Node;
-    special->type = REGEX_NODE_SYMBOL;
-    special->value = '#';
+Node * augment_pattern(Node * old_root, std::vector<char32_t> * symbol_at) {
+    Node * special    = new Node;
+    special->type     = REGEX_NODE_SYMBOL;
+    special->value    = '#';
     special->position = symbol_at->size();
 
-    Node* root = new Node;
-    root->type = REGEX_NODE_CONCATENATION;
-    root->left_child = std::move(old_root);
+    Node * root       = new Node;
+    root->type        = REGEX_NODE_CONCATENATION;
+    root->left_child  = std::move(old_root);
     root->right_child = std::move(special);
 
     symbol_at->push_back('#');
@@ -29,34 +31,34 @@ static void desugar(std::string & pattern) {
     throw std::logic_error("feature not implemented");
 }
 
-Node* regex_parse(std::string & pattern, std::vector<char32_t> * symbol_at) {
+Node * regex_parse(std::string & pattern, std::vector<char32_t> * symbol_at) {
     //desugar(pattern);
 
-    Node* current_node;
-    Node* new_leaf;
-    Node* next_node = nullptr;
-    next_node = new Node;
+    Node * current_node;
+    Node * new_leaf;
+    Node * next_node = nullptr;
+    next_node        = new Node;
 
-    if (pattern.empty())  {
+    if (pattern.empty()) {
         next_node->type = REGEX_NODE_EPSILON;
         return next_node;
     }
 
     // Syntax tree is initialized with a symbol. Start by handling cases where first character is not a literal symbol
-    if (pattern[0]=='(') {
+    if (pattern[0] == '(') {
         std::string sub_pattern = pattern.substr(1, pattern.find(')') - 1);
-        current_node = regex_parse(sub_pattern, symbol_at);
-        next_node->left_child = current_node;
-    } else if (pattern[0]=='\\') {
+        current_node            = regex_parse(sub_pattern, symbol_at);
+        next_node->left_child   = current_node;
+    } else if (pattern[0] == '\\') {
         throw std::logic_error("feature not implemented");
     }
 
-    next_node->type = REGEX_NODE_SYMBOL;
-    next_node->value = pattern[0];
+    next_node->type     = REGEX_NODE_SYMBOL;
+    next_node->value    = pattern[0];
     next_node->position = 0;
     symbol_at->push_back(pattern[0]);
     int pos = 0;
-    for (int i = 1; i < pattern.length(); i++) { //start at index 1 insted of 0 to get operator
+    for (int i = 1; i < pattern.length(); i++) {  //start at index 1 insted of 0 to get operator
         current_node = next_node;
         switch (pattern[i]) {
             case '|':
@@ -66,32 +68,32 @@ Node* regex_parse(std::string & pattern, std::vector<char32_t> * symbol_at) {
             case '*':
                 throw std::logic_error("feature not implemented");
                 break;
-            
+
             case '(':
                 throw std::logic_error("feature not implemented");
                 break;
 
-            case '\0': //end of pattern. Just breat out of for loop
+            case '\0':  //end of pattern. Just breat out of for loop
                 break;
 
-            default: //symbol
-                if (pattern[i+1]=='|' || pattern[i+1]=='*') {
+            default:  //symbol
+                if (pattern[i + 1] == '|' || pattern[i + 1] == '*') {
                     throw std::logic_error("feature not implemented");
                     i++;
 
-                } else { //concatenation
-                    if (pattern[i+1]=='(') {
+                } else {  //concatenation
+                    if (pattern[i + 1] == '(') {
                         throw std::logic_error("feature not implemented");
                     } else {
-                        new_leaf = new Node;
-                        new_leaf->type = REGEX_NODE_SYMBOL;
-                        new_leaf->value = pattern[i];
+                        new_leaf           = new Node;
+                        new_leaf->type     = REGEX_NODE_SYMBOL;
+                        new_leaf->value    = pattern[i];
                         new_leaf->position = pos++;
                         symbol_at->push_back(pattern[i]);
 
-                        next_node = new Node;
-                        next_node->type = REGEX_NODE_CONCATENATION;
-                        next_node->left_child = current_node;
+                        next_node              = new Node;
+                        next_node->type        = REGEX_NODE_CONCATENATION;
+                        next_node->left_child  = current_node;
                         next_node->right_child = new_leaf;
                     }
                 }
@@ -141,8 +143,8 @@ DFA regex_to_dfa(std::string pattern) {
     // Parse the pattern, and return a syntax tree of the augmented pattern (r)# aswell as a lookup table `symbol_at`
     std::vector<char32_t> symbol_at;
     symbol_at.reserve(pattern.size());
-    Node* tree = regex_parse(pattern, &symbol_at);
-    Node* root = augment_pattern(tree, &symbol_at);
+    Node * tree = regex_parse(pattern, &symbol_at);
+    Node * root = augment_pattern(tree, &symbol_at);
 
     // Define an alphabet to only contain terminal symbols found in the regex
     std::set<char32_t> alphabet(symbol_at.begin(), symbol_at.end());
@@ -188,7 +190,7 @@ DFA regex_to_dfa(std::string pattern) {
         }
     }
 
-    free_tree(root); //syntax tree desctructor
+    free_tree(root);  //syntax tree desctructor
 
     return { 0 };
 }
