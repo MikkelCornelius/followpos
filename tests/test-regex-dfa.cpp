@@ -113,7 +113,7 @@ static void test_parse_star()       { check_parse("a*",  "((a*).#)",      { 'a',
 static void test_parse_cat_star()   { check_parse("ab*", "((a.(b*)).#)",  { 'a', 'b', '#' }); }
 static void test_parse_precedence() { check_parse("aa|ab*", "(((a.a)|(a.(b*))).#)", { 'a', 'a', 'a', 'b', '#' }); }
 static void test_parse_group()      { check_parse("(a|b)*", "(((a|b)*).#)", { 'a', 'b', '#' }); }
-static void test_parse_group_cat()      { check_parse("(ab)(ab)", "((a.b).(a.b)).#)", { 'a', 'b', 'a', 'b', '#' }); }
+static void test_parse_group_cat()  { check_parse("(ab)(ab)", "(((a.b).(a.b)).#)", { 'a', 'b', 'a', 'b', '#' }); }
 static void test_parse_full()       { check_parse("(a|b)*abb", "((((((a|b)*).a).b).b).#)", { 'a', 'b', 'a', 'b', 'b', '#' }); }
 
 // ---------------------------------------------------------------------------
