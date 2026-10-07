@@ -32,118 +32,88 @@ void desugar(std::string & pattern) {
     throw std::logic_error("feature not implemented");
 }
 
-static int find_group(std::string pattern, int sub_pattern_start_index) {
-    int count = 1;  // Start at 1 for the opening parenthesis we're matching
+Parser::Parser(const std::string & pattern, std::vector<char32_t> * symbol_at) : s(pattern), symbol_at(symbol_at) {}
 
-    for (int i = sub_pattern_start_index; i < pattern.length(); i++) {
-        if (pattern[i] == '(') {
-            count++;
-        } else if (pattern[i] == ')') {
-            count--;
-            if (count == 0) {
-                return i;  // Found the matching closing paren
-            }
-        }
-    }
-    return -1;  // No matching closing paren found
+char Parser::peek() const {
+    return i < s.size() ? s[i] : '\0';
 }
 
+Node * Parser::make(regex_node_type type, Node * left, Node * right) {
+    Node * n       = new Node;
+    n->type        = type;
+    n->left_child  = left;
+    n->right_child = right;
+    return n;
+}
+
+Node * Parser::parse() {
+    Node * tree = parse_or();
+    if (i < s.size()) {
+        throw std::logic_error("unexpected character in pattern");  // e.g. a stray ')'
+    }
+    return tree;
+}
+
+Node * Parser::parse_or() {
+    Node * left = parse_cat();
+    while (peek() == '|') {
+        i++;
+        left = make(REGEX_NODE_ALTERNATION, left, parse_cat());
+    }
+    return left;
+}
+
+Node * Parser::parse_cat() {
+    Node * left = nullptr;
+    while (peek() != '\0' && peek() != '|' && peek() != ')') {
+        Node * right = parse_postfix();
+        left         = left ? make(REGEX_NODE_CONCATENATION, left, right) : right;
+    }
+    return left ? left : make(REGEX_NODE_EPSILON, nullptr);
+}
+
+Node * Parser::parse_postfix() {
+    Node * node = parse_atom();
+    while (peek() == '*') {
+        i++;
+        node = make(REGEX_NODE_REPETITION, node);
+    }
+    return node;
+}
+
+Node * Parser::parse_atom() {
+    if (i >= s.size()) {
+        throw std::logic_error("unexpected end of pattern");
+    }
+
+    char c = s[i++];
+    if (c == '(') {
+        Node * node = parse_or();
+        if (peek() != ')') {
+            throw std::logic_error("missing )");
+        }
+        i++;
+        return node;
+    }
+    if (c == '*') {
+        throw std::logic_error("nothing to repeat");
+    }
+    if (c == '\\') {
+        throw std::logic_error("feature not implemented");
+    }
+
+    Node * node    = make(REGEX_NODE_SYMBOL, nullptr);
+    node->value    = c;
+    node->position = symbol_at->size();  // next free position
+    symbol_at->push_back(c);
+    return node;
+}
+
+
+
 Node * regex_parse(std::string & pattern, std::vector<char32_t> * symbol_at) {
-    //desugar(pattern);
-
-    Node * current_node = nullptr;
-    Node * new_branch;
-    Node * next_node = nullptr;
-    int    i         = 1;
-
-    if (pattern.empty()) {
-        next_node       = new Node;
-        next_node->type = REGEX_NODE_EPSILON;
-        return next_node;
-    }
-
-    // Start by initalizing the tree. Three cases: group "(x)", special "\", or symbol
-    bool initalized = false;
-    while (pattern[i - 1] == '(') {  //can't initalize a group. Instead dig in and initalize a subpattern
-        initalized = true;           //if while loop ran at least once
-
-        // Find sub pattern
-        int         end         = find_group(pattern.c_str(), i);
-        std::string sub_pattern = pattern.substr(i, end - i);
-
-        if (next_node ==
-            nullptr) {  //if first iteration, call `regex_parse()` and use generated syntax tree as the initializer
-            // Parse sub pattern
-            next_node = regex_parse(sub_pattern, symbol_at);
-
-        } else {  //else concatenate subtree
-            current_node           = next_node;
-            next_node              = new Node;
-            next_node->type        = REGEX_NODE_CONCATENATION;
-            next_node->left_child  = current_node;
-            next_node->right_child = regex_parse(sub_pattern, symbol_at);
-        }
-
-        // Continue from next operator
-        i = end + 2;
-    }
-    if (!initalized) {
-        if (pattern[0] == '\\') {
-            throw std::logic_error("feature not implemented");
-
-        } else {  //symbol
-            next_node           = new Node;
-            next_node->type     = REGEX_NODE_SYMBOL;
-            next_node->value    = pattern[0];
-            next_node->position = 0;
-            symbol_at->push_back(pattern[0]);
-        }
-    }
-
-    int pos = 0;
-    for (i; i < pattern.length(); i++) {  //start at index 1 insted of 0 to get operator
-        current_node = next_node;
-        switch (pattern[i]) {
-            case '|':
-                i++;  //increment one more time to get symbol
-                new_branch           = new Node;
-                new_branch->type     = REGEX_NODE_SYMBOL;
-                new_branch->value    = pattern[i];
-                new_branch->position = pos++;
-                symbol_at->push_back(pattern[i]);
-
-                next_node              = new Node;
-                next_node->type        = REGEX_NODE_ALTERNATION;
-                next_node->left_child  = current_node;
-                next_node->right_child = new_branch;
-                break;
-
-            case '*':
-                next_node             = new Node;
-                next_node->type       = REGEX_NODE_REPETITION;
-                next_node->left_child = current_node;
-                break;
-
-            case '(':
-                throw std::logic_error("feature not implemented");
-                break;
-
-            default:  //symbol
-                new_branch           = new Node;
-                new_branch->type     = REGEX_NODE_SYMBOL;
-                new_branch->value    = pattern[i];
-                new_branch->position = pos++;
-                symbol_at->push_back(pattern[i]);
-
-                next_node              = new Node;
-                next_node->type        = REGEX_NODE_CONCATENATION;
-                next_node->left_child  = current_node;
-                next_node->right_child = new_branch;
-                break;
-        }
-    }
-
-    return next_node;
+    Parser p{ pattern, symbol_at };
+    return p.parse();
 }
 
 void regex_annotate(Node * node, std::vector<std::set<int>> * followpos) {
@@ -182,10 +152,15 @@ void regex_annotate(Node * node, std::vector<std::set<int>> * followpos) {
 }
 
 DFA regex_to_dfa(std::string pattern) {
+
+    // Remove syntactic sugar
+    //desugar(pattern);
+
     // Parse the pattern, and return a syntax tree of the augmented pattern (r)# aswell as a lookup table `symbol_at`
     std::vector<char32_t> symbol_at;
     symbol_at.reserve(pattern.size());
-    Node * tree = regex_parse(pattern, &symbol_at);
+    Parser p{ pattern, &symbol_at };
+    Node * tree = p.parse();
     Node * root = augment_pattern(tree, &symbol_at);
 
     // Define an alphabet to only contain terminal symbols found in the regex

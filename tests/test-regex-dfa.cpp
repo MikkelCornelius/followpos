@@ -57,9 +57,10 @@ static Node* star(Node* c) { return make(REGEX_NODE_REPETITION, c); }
 
 // Parse a pattern and compare the augmented tree and symbol table
 static void check_parse(const std::string & pattern, const std::string & expected_tree, const std::vector<char32_t> & expected_symbols) {
-    std::string           p = pattern;
     std::vector<char32_t> symbol_at;
-    Node *                root = augment_pattern(regex_parse(p, &symbol_at), &symbol_at);
+    Parser p{ pattern, &symbol_at };
+    Node * tree = p.parse();
+    Node * root = augment_pattern(tree, &symbol_at);
 
     std::string got = to_string(*root);
     if (got != expected_tree) {
@@ -108,7 +109,7 @@ static void test_parse_symbol()     { check_parse("a",   "(a.#)",         { 'a',
 static void test_parse_concat()     { check_parse("ab",  "((a.b).#)",     { 'a', 'b', '#' }); }
 static void test_parse_repeat_sym() { check_parse("aa",  "((a.a).#)",     { 'a', 'a', '#' }); }
 static void test_parse_alt()        { check_parse("a|b", "((a|b).#)",     { 'a', 'b', '#' }); }
-static void test_parse_cat_alt()    { check_parse("aa|b", "(a.(a|b).#)",     { 'a', 'a', 'b', '#' }); }
+static void test_parse_cat_alt()    { check_parse("aa|b", "(((a.a)|b).#)",  { 'a', 'a', 'b', '#' }); }
 static void test_parse_star()       { check_parse("a*",  "((a*).#)",      { 'a', '#' }); }
 static void test_parse_cat_star()   { check_parse("ab*", "((a.(b*)).#)",  { 'a', 'b', '#' }); }
 static void test_parse_precedence() { check_parse("aa|ab*", "(((a.a)|(a.(b*))).#)", { 'a', 'a', 'a', 'b', '#' }); }

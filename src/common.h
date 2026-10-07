@@ -27,6 +27,26 @@ struct Node {
 
 void free_tree(Node* node);
 
+struct Parser {
+    Parser(const std::string & pattern, std::vector<char32_t> * symbol_at);
+ 
+    Node * parse();
+ 
+    const std::string &     s;
+    std::vector<char32_t> * symbol_at;
+    size_t                  i = 0;
+ 
+    char   peek() const;
+    Node * make(regex_node_type type, Node * left, Node * right = nullptr);
+ 
+    Node * parse_or();
+    Node * parse_cat();
+    Node * parse_postfix();
+    Node * parse_atom();
+};
+
+
+
 struct Transition {
     std::set<int> to;
     char32_t      symbol;
