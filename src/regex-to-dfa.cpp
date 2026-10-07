@@ -32,10 +32,9 @@ void desugar(std::string & pattern) {
     throw std::logic_error("feature not implemented");
 }
 
-
 static int find_group(std::string pattern, int sub_pattern_start_index) {
     int count = 1;  // Start at 1 for the opening parenthesis we're matching
-    
+
     for (int i = sub_pattern_start_index; i < pattern.length(); i++) {
         if (pattern[i] == '(') {
             count++;
@@ -55,7 +54,7 @@ Node * regex_parse(std::string & pattern, std::vector<char32_t> * symbol_at) {
     Node * current_node = nullptr;
     Node * new_branch;
     Node * next_node = nullptr;
-    int i            = 1;
+    int    i         = 1;
 
     if (pattern.empty()) {
         next_node       = new Node;
@@ -65,19 +64,20 @@ Node * regex_parse(std::string & pattern, std::vector<char32_t> * symbol_at) {
 
     // Start by initalizing the tree. Three cases: group "(x)", special "\", or symbol
     bool initalized = false;
-    while (pattern[i-1] == '(') { //can't initalize a group. Instead dig in and initalize a subpattern
-        initalized = true; //if while loop ran at least once
+    while (pattern[i - 1] == '(') {  //can't initalize a group. Instead dig in and initalize a subpattern
+        initalized = true;           //if while loop ran at least once
 
         // Find sub pattern
-        int end                 = find_group(pattern.c_str(), i);
+        int         end         = find_group(pattern.c_str(), i);
         std::string sub_pattern = pattern.substr(i, end - i);
 
-        if (next_node == nullptr) { //if first iteration, call `regex_parse()` and use generated syntax tree as the initializer
+        if (next_node ==
+            nullptr) {  //if first iteration, call `regex_parse()` and use generated syntax tree as the initializer
             // Parse sub pattern
             next_node = regex_parse(sub_pattern, symbol_at);
 
-        } else { //else concatenate subtree
-            current_node = next_node;
+        } else {  //else concatenate subtree
+            current_node           = next_node;
             next_node              = new Node;
             next_node->type        = REGEX_NODE_CONCATENATION;
             next_node->left_child  = current_node;
@@ -91,7 +91,7 @@ Node * regex_parse(std::string & pattern, std::vector<char32_t> * symbol_at) {
         if (pattern[0] == '\\') {
             throw std::logic_error("feature not implemented");
 
-        } else { //symbol
+        } else {  //symbol
             next_node           = new Node;
             next_node->type     = REGEX_NODE_SYMBOL;
             next_node->value    = pattern[0];
@@ -105,7 +105,7 @@ Node * regex_parse(std::string & pattern, std::vector<char32_t> * symbol_at) {
         current_node = next_node;
         switch (pattern[i]) {
             case '|':
-                i++; //increment one more time to get symbol
+                i++;  //increment one more time to get symbol
                 new_branch           = new Node;
                 new_branch->type     = REGEX_NODE_SYMBOL;
                 new_branch->value    = pattern[i];
@@ -119,9 +119,9 @@ Node * regex_parse(std::string & pattern, std::vector<char32_t> * symbol_at) {
                 break;
 
             case '*':
-                next_node              = new Node;
-                next_node->type        = REGEX_NODE_REPETITION;
-                next_node->left_child  = current_node;
+                next_node             = new Node;
+                next_node->type       = REGEX_NODE_REPETITION;
+                next_node->left_child = current_node;
                 break;
 
             case '(':
