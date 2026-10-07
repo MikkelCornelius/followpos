@@ -12,6 +12,7 @@ void free_tree(Node * node) {
     delete node;
 }
 
+// The augmented pattern "(r)#"
 Node * augment_pattern(Node * old_root, std::vector<char32_t> * symbol_at) {
     Node * special    = new Node;
     special->type     = REGEX_NODE_SYMBOL;
@@ -62,7 +63,17 @@ Node * regex_parse(std::string & pattern, std::vector<char32_t> * symbol_at) {
         current_node = next_node;
         switch (pattern[i]) {
             case '|':
-                throw std::logic_error("feature not implemented");
+                i++; //increment one more time to get symbol
+                new_leaf           = new Node;
+                new_leaf->type     = REGEX_NODE_SYMBOL;
+                new_leaf->value    = pattern[i];
+                new_leaf->position = pos++;
+                symbol_at->push_back(pattern[i]);
+
+                next_node              = new Node;
+                next_node->type        = REGEX_NODE_ALTERNATION;
+                next_node->left_child  = current_node;
+                next_node->right_child = new_leaf;
                 break;
 
             case '*':
@@ -73,30 +84,17 @@ Node * regex_parse(std::string & pattern, std::vector<char32_t> * symbol_at) {
                 throw std::logic_error("feature not implemented");
                 break;
 
-            case '\0':  //end of pattern. Just breat out of for loop
-                break;
-
             default:  //symbol
-                if (pattern[i + 1] == '|' || pattern[i + 1] == '*') {
-                    throw std::logic_error("feature not implemented");
-                    i++;
+                new_leaf           = new Node;
+                new_leaf->type     = REGEX_NODE_SYMBOL;
+                new_leaf->value    = pattern[i];
+                new_leaf->position = pos++;
+                symbol_at->push_back(pattern[i]);
 
-                } else {  //concatenation
-                    if (pattern[i + 1] == '(') {
-                        throw std::logic_error("feature not implemented");
-                    } else {
-                        new_leaf           = new Node;
-                        new_leaf->type     = REGEX_NODE_SYMBOL;
-                        new_leaf->value    = pattern[i];
-                        new_leaf->position = pos++;
-                        symbol_at->push_back(pattern[i]);
-
-                        next_node              = new Node;
-                        next_node->type        = REGEX_NODE_CONCATENATION;
-                        next_node->left_child  = current_node;
-                        next_node->right_child = new_leaf;
-                    }
-                }
+                next_node              = new Node;
+                next_node->type        = REGEX_NODE_CONCATENATION;
+                next_node->left_child  = current_node;
+                next_node->right_child = new_leaf;
                 break;
         }
     }
