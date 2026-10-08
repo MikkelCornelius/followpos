@@ -15,37 +15,35 @@ enum regex_node_type {
 };
 
 struct Node {
-    regex_node_type     type     = REGEX_NODE_EPSILON;
-    char32_t            value    = '\0';
-    int                 position = -1;
-    Node*               left_child = nullptr;
-    Node*               right_child = nullptr;
-    bool                nullable;
-    std::set<int>       firstpos;
-    std::set<int>       lastpos;
+    regex_node_type type        = REGEX_NODE_EPSILON;
+    char32_t        value       = '\0';
+    int             position    = -1;
+    Node *          left_child  = nullptr;
+    Node *          right_child = nullptr;
+    bool            nullable;
+    std::set<int>   firstpos;
+    std::set<int>   lastpos;
 };
 
-void free_tree(Node* node);
+void free_tree(Node * node);
 
 struct Parser {
     Parser(const std::string & pattern, std::vector<char32_t> * symbol_at);
- 
+
     Node * parse();
- 
+
     const std::string &     s;
     std::vector<char32_t> * symbol_at;
     size_t                  i = 0;
- 
+
     char   peek() const;
     Node * make(regex_node_type type, Node * left, Node * right = nullptr);
- 
+
     Node * parse_or();
     Node * parse_cat();
     Node * parse_postfix();
     Node * parse_atom();
 };
-
-
 
 struct Transition {
     std::set<int> to;
@@ -58,9 +56,7 @@ struct DFA {
 
 using Transitions = std::map<std::set<int>, std::vector<Transition>>;
 
-Node* augment_pattern(Node* old_root, std::vector<char32_t>* symbol_at);
-
-Node* regex_parse(std::string & pattern, std::vector<char32_t> * symbol_at);
+Node * augment_pattern(Node * old_root, std::vector<char32_t> * symbol_at);
 
 void regex_annotate(Node * node, std::vector<std::set<int>> * followpos);
 

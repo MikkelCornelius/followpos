@@ -2,7 +2,6 @@
 
 #include <cstdio>
 #include <stdexcept>
-#include <iostream>
 
 static int n_fail = 0;
 
@@ -22,17 +21,22 @@ using positions = std::set<int>;
 
 static std::string to_string(const Node & n) {
     switch (n.type) {
-        case REGEX_NODE_EPSILON:       return "e";
-        case REGEX_NODE_SYMBOL:        return std::string(1, (char) n.value);
-        case REGEX_NODE_CONCATENATION: return "(" + to_string(*n.left_child) + "." + to_string(*n.right_child) + ")";
-        case REGEX_NODE_ALTERNATION:   return "(" + to_string(*n.left_child) + "|" + to_string(*n.right_child) + ")";
-        case REGEX_NODE_REPETITION:    return "(" + to_string(*n.left_child) + "*)";
+        case REGEX_NODE_EPSILON:
+            return "e";
+        case REGEX_NODE_SYMBOL:
+            return std::string(1, (char) n.value);
+        case REGEX_NODE_CONCATENATION:
+            return "(" + to_string(*n.left_child) + "." + to_string(*n.right_child) + ")";
+        case REGEX_NODE_ALTERNATION:
+            return "(" + to_string(*n.left_child) + "|" + to_string(*n.right_child) + ")";
+        case REGEX_NODE_REPETITION:
+            return "(" + to_string(*n.left_child) + "*)";
     }
     return "";
 }
 
 // Hand-built syntax tree nodes (all pointers initialized, so trees are safe to free)
-static Node* leaf(int position, char32_t c) {
+static Node * leaf(int position, char32_t c) {
     auto n         = new Node;
     n->type        = REGEX_NODE_SYMBOL;
     n->value       = c;
@@ -42,7 +46,7 @@ static Node* leaf(int position, char32_t c) {
     return n;
 }
 
-static Node* make(regex_node_type type, Node* left = nullptr, Node* right = nullptr) {
+static Node * make(regex_node_type type, Node * left = nullptr, Node * right = nullptr) {
     auto n         = new Node;
     n->type        = type;
     n->left_child  = left;
@@ -50,17 +54,30 @@ static Node* make(regex_node_type type, Node* left = nullptr, Node* right = null
     return n;
 }
 
-static Node* eps() { return make(REGEX_NODE_EPSILON); }
-static Node* cat(Node* l, Node* r) { return make(REGEX_NODE_CONCATENATION, l, r); }
-static Node* alt(Node* l, Node* r) { return make(REGEX_NODE_ALTERNATION, l, r); }
-static Node* star(Node* c) { return make(REGEX_NODE_REPETITION, c); }
+static Node * eps() {
+    return make(REGEX_NODE_EPSILON);
+}
+
+static Node * cat(Node * l, Node * r) {
+    return make(REGEX_NODE_CONCATENATION, l, r);
+}
+
+static Node * alt(Node * l, Node * r) {
+    return make(REGEX_NODE_ALTERNATION, l, r);
+}
+
+static Node * star(Node * c) {
+    return make(REGEX_NODE_REPETITION, c);
+}
 
 // Parse a pattern and compare the augmented tree and symbol table
-static void check_parse(const std::string & pattern, const std::string & expected_tree, const std::vector<char32_t> & expected_symbols) {
+static void check_parse(const std::string &           pattern,
+                        const std::string &           expected_tree,
+                        const std::vector<char32_t> & expected_symbols) {
     std::vector<char32_t> symbol_at;
-    Parser p{ pattern, &symbol_at };
-    Node * tree = p.parse();
-    Node * root = augment_pattern(tree, &symbol_at);
+    Parser                p{ pattern, &symbol_at };
+    Node *                tree = p.parse();
+    Node *                root = augment_pattern(tree, &symbol_at);
 
     std::string got = to_string(*root);
     if (got != expected_tree) {
@@ -68,7 +85,8 @@ static void check_parse(const std::string & pattern, const std::string & expecte
         n_fail++;
     }
     if (symbol_at != expected_symbols) {
-        printf("FAIL parse '%s': got %zu symbols, expected %zu\n", pattern.c_str(), symbol_at.size(), expected_symbols.size());
+        printf("FAIL parse '%s': got %zu symbols, expected %zu\n", pattern.c_str(), symbol_at.size(),
+               expected_symbols.size());
         n_fail++;
     }
 }
@@ -82,7 +100,9 @@ struct analyzed {
 // Parse, augment and annotate a pattern
 static analyzed analyze(std::string pattern) {
     analyzed a;
-    a.root = augment_pattern(regex_parse(pattern, &a.symbol_at), &a.symbol_at);
+    Parser   p{ pattern, &a.symbol_at };
+    Node *   tree = p.parse();
+    a.root        = augment_pattern(tree, &a.symbol_at);
     a.followpos.resize(a.symbol_at.size());
     regex_annotate(a.root, &a.followpos);
     return a;
@@ -104,25 +124,60 @@ static void run(const char * name, void (*fn)()) {
 // Parser tests (one per case, so one failure doesn't hide the others)
 // ---------------------------------------------------------------------------
 
-static void test_parse_empty()      { check_parse("",    "(e.#)",         { '#' }); }
-static void test_parse_symbol()     { check_parse("a",   "(a.#)",         { 'a', '#' }); }
-static void test_parse_concat()     { check_parse("ab",  "((a.b).#)",     { 'a', 'b', '#' }); }
-static void test_parse_repeat_sym() { check_parse("aa",  "((a.a).#)",     { 'a', 'a', '#' }); }
-static void test_parse_alt()        { check_parse("a|b", "((a|b).#)",     { 'a', 'b', '#' }); }
-static void test_parse_cat_alt()    { check_parse("aa|b", "(((a.a)|b).#)",  { 'a', 'a', 'b', '#' }); }
-static void test_parse_star()       { check_parse("a*",  "((a*).#)",      { 'a', '#' }); }
-static void test_parse_cat_star()   { check_parse("ab*", "((a.(b*)).#)",  { 'a', 'b', '#' }); }
-static void test_parse_precedence() { check_parse("aa|ab*", "(((a.a)|(a.(b*))).#)", { 'a', 'a', 'a', 'b', '#' }); }
-static void test_parse_group()      { check_parse("(a|b)*", "(((a|b)*).#)", { 'a', 'b', '#' }); }
-static void test_parse_group_cat()  { check_parse("(ab)(ab)", "(((a.b).(a.b)).#)", { 'a', 'b', 'a', 'b', '#' }); }
-static void test_parse_full()       { check_parse("(a|b)*abb", "((((((a|b)*).a).b).b).#)", { 'a', 'b', 'a', 'b', 'b', '#' }); }
+static void test_parse_empty() {
+    check_parse("", "(e.#)", { '#' });
+}
+
+static void test_parse_symbol() {
+    check_parse("a", "(a.#)", { 'a', '#' });
+}
+
+static void test_parse_concat() {
+    check_parse("ab", "((a.b).#)", { 'a', 'b', '#' });
+}
+
+static void test_parse_repeat_sym() {
+    check_parse("aa", "((a.a).#)", { 'a', 'a', '#' });
+}
+
+static void test_parse_alt() {
+    check_parse("a|b", "((a|b).#)", { 'a', 'b', '#' });
+}
+
+static void test_parse_cat_alt() {
+    check_parse("aa|b", "(((a.a)|b).#)", { 'a', 'a', 'b', '#' });
+}
+
+static void test_parse_star() {
+    check_parse("a*", "((a*).#)", { 'a', '#' });
+}
+
+static void test_parse_cat_star() {
+    check_parse("ab*", "((a.(b*)).#)", { 'a', 'b', '#' });
+}
+
+static void test_parse_precedence() {
+    check_parse("aa|ab*", "(((a.a)|(a.(b*))).#)", { 'a', 'a', 'a', 'b', '#' });
+}
+
+static void test_parse_group() {
+    check_parse("(a|b)*", "(((a|b)*).#)", { 'a', 'b', '#' });
+}
+
+static void test_parse_group_cat() {
+    check_parse("(ab)(ab)", "(((a.b).(a.b)).#)", { 'a', 'b', 'a', 'b', '#' });
+}
+
+static void test_parse_full() {
+    check_parse("(a|b)*abb", "((((((a|b)*).a).b).b).#)", { 'a', 'b', 'a', 'b', 'b', '#' });
+}
 
 // ---------------------------------------------------------------------------
 // Annotation tests on hand-built trees (independent of the parser)
 // ---------------------------------------------------------------------------
 
 static void test_annotate_epsilon() {  // (e)#
-    auto root = cat(eps(), leaf(0, '#'));
+    auto                       root = cat(eps(), leaf(0, '#'));
     std::vector<std::set<int>> followpos(1);
 
     regex_annotate(root, &followpos);
@@ -138,7 +193,7 @@ static void test_annotate_epsilon() {  // (e)#
 }
 
 static void test_annotate_alternation() {  // (a|b)#
-    auto root = cat(alt(leaf(0, 'a'), leaf(1, 'b')), leaf(2, '#'));
+    auto                       root = cat(alt(leaf(0, 'a'), leaf(1, 'b')), leaf(2, '#'));
     std::vector<std::set<int>> followpos(3);
 
     regex_annotate(root, &followpos);
@@ -153,9 +208,7 @@ static void test_annotate_alternation() {  // (a|b)#
 }
 
 static void test_annotate_concat_repetition() {  // (ab*)#
-    auto root = cat(
-        cat(leaf(0, 'a'), star(leaf(1, 'b'))),
-        leaf(2, '#'));
+    auto                       root = cat(cat(leaf(0, 'a'), star(leaf(1, 'b'))), leaf(2, '#'));
     std::vector<std::set<int>> followpos(3);
 
     regex_annotate(root, &followpos);
@@ -170,7 +223,7 @@ static void test_annotate_concat_repetition() {  // (ab*)#
 }
 
 static void test_annotate_star_of_alternation() {  // ((a|b)*)#
-    auto root = cat(star(alt(leaf(0, 'a'), leaf(1, 'b'))), leaf(2, '#'));
+    auto                       root = cat(star(alt(leaf(0, 'a'), leaf(1, 'b'))), leaf(2, '#'));
     std::vector<std::set<int>> followpos(3);
 
     regex_annotate(root, &followpos);
