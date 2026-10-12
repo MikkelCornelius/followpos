@@ -75,9 +75,9 @@ static void check_parse(const std::string &           pattern,
                         const std::string &           expected_tree,
                         const std::vector<char32_t> & expected_symbols) {
     std::vector<char32_t> symbol_at;
-    Parser                p{ pattern, &symbol_at };
+    Parser                p{ pattern, symbol_at };
     Node *                tree = p.parse();
-    Node *                root = augment_pattern(tree, &symbol_at);
+    Node *                root = augment_pattern(tree, symbol_at);
 
     std::string got = to_string(*root);
     if (got != expected_tree) {
@@ -99,7 +99,8 @@ struct analyzed {
 // Build states and transitions for a pattern
 static analyzed analyze(std::string pattern) {
     analyzed a;
-    followpos(pattern, &a.dstates, &a.dtran);
+    std::set<char32_t> alphabet;
+    followpos(pattern, alphabet, a.dstates, a.dtran);
     return a;
 }
 
@@ -199,7 +200,7 @@ static void test_annotate_epsilon() {  // (e)#
     auto                          root = cat(eps(), leaf(0, '#'));
     std::vector<std::set<size_t>> followpos(1);
 
-    regex_annotate(root, &followpos);
+    regex_annotate(*root, followpos);
 
     CHECK(root->left_child->nullable);
     CHECK(root->left_child->firstpos.empty());
@@ -215,7 +216,7 @@ static void test_annotate_alternation() {  // (a|b)#
     auto                          root = cat(alt(leaf(0, 'a'), leaf(1, 'b')), leaf(2, '#'));
     std::vector<std::set<size_t>> followpos(3);
 
-    regex_annotate(root, &followpos);
+    regex_annotate(*root, followpos);
 
     CHECK(!root->nullable);
     CHECK(root->firstpos == positions({ 0, 1 }));
@@ -230,7 +231,7 @@ static void test_annotate_concat_repetition() {  // (ab*)#
     auto                          root = cat(cat(leaf(0, 'a'), star(leaf(1, 'b'))), leaf(2, '#'));
     std::vector<std::set<size_t>> followpos(3);
 
-    regex_annotate(root, &followpos);
+    regex_annotate(*root, followpos);
 
     CHECK(!root->nullable);
     CHECK(root->firstpos == positions({ 0 }));
@@ -245,7 +246,7 @@ static void test_annotate_star_of_alternation() {  // ((a|b)*)#
     auto                          root = cat(star(alt(leaf(0, 'a'), leaf(1, 'b'))), leaf(2, '#'));
     std::vector<std::set<size_t>> followpos(3);
 
-    regex_annotate(root, &followpos);
+    regex_annotate(*root, followpos);
 
     CHECK(!root->nullable);
     CHECK(root->left_child->nullable);
@@ -317,7 +318,7 @@ static void test_build_transition_table() {
     std::vector<size_t> next_state;
     std::vector<size_t> check;
     std::vector<size_t> base = { 0 };
-    build_transition_table(dstates, dtran, &next_state, &check, &base);
+    build_transition_table(dstates, dtran, next_state, check, base);
     DFA dfa{ next_state, check, base };
 
     CHECK(dfa.base.size() == 5);

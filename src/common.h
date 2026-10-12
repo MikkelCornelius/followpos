@@ -29,12 +29,12 @@ struct Node {
 void free_tree(Node * node);
 
 struct Parser {
-    Parser(const std::string & pattern, std::vector<char32_t> * symbol_at);
+    Parser(const std::string & pattern, std::vector<char32_t> & symbol_at);
 
     Node * parse();
 
     const std::string &     s;
-    std::vector<char32_t> * symbol_at;
+    std::vector<char32_t> & symbol_at;
     size_t                  i = 0;
 
     char   peek() const;
@@ -59,16 +59,19 @@ struct DFA {
 
 using Transitions = std::map<std::set<size_t>, std::vector<Transition>>;
 
-Node * augment_pattern(Node * old_root, std::vector<char32_t> * symbol_at);
+Node * augment_pattern(Node * old_root, std::vector<char32_t> & symbol_at);
 
-void regex_annotate(Node * node, std::vector<std::set<size_t>> * followpos);
+void regex_annotate(Node & node, std::vector<std::set<size_t>> & followpos);
 
-void followpos(std::string pattern, std::set<std::set<size_t>> * dstates, Transitions * dtran);
+void followpos(std::string pattern,
+               std::set<char32_t> & alphabet,
+               std::set<std::set<size_t>> & dstates,
+               Transitions & dtran);
 
 void build_transition_table(std::set<std::set<size_t>> dstates,
                             Transitions                dtran,
-                            std::vector<size_t> *      next_state,
-                            std::vector<size_t> *      check,
-                            std::vector<size_t> *      base);
+                            std::vector<size_t> &      next_state,
+                            std::vector<size_t> &      check,
+                            std::vector<size_t> &      base);
 
 DFA regex_to_dfa(std::string pattern);
