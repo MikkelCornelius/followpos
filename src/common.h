@@ -5,6 +5,7 @@
 #include <set>
 #include <string>
 #include <vector>
+#include <algorithm> //for a sorting algorithm. A non-sorted vector would also be okay
 
 enum regex_node_type {
     REGEX_NODE_EPSILON       = 0,
@@ -21,8 +22,8 @@ struct Node {
     Node *          left_child  = nullptr;
     Node *          right_child = nullptr;
     bool            nullable;
-    std::set<int>   firstpos;
-    std::set<int>   lastpos;
+    std::set<size_t>   firstpos;
+    std::set<size_t>   lastpos;
 };
 
 void free_tree(Node * node);
@@ -46,18 +47,26 @@ struct Parser {
 };
 
 struct Transition {
-    std::set<int> to;
+    std::set<size_t> to;
     char32_t      symbol;
 };
 
 struct DFA {
-    int dummy;  //not yet implemented
+    std::vector<size_t> next_state;
+    std::vector<size_t> check;
+    std::vector<size_t> base;
 };
 
-using Transitions = std::map<std::set<int>, std::vector<Transition>>;
+using Transitions = std::map<std::set<size_t>, std::vector<Transition>>;
 
 Node * augment_pattern(Node * old_root, std::vector<char32_t> * symbol_at);
 
-void regex_annotate(Node * node, std::vector<std::set<int>> * followpos);
+void regex_annotate(Node * node, std::vector<std::set<size_t>> * followpos);
+
+void followpos(std::string pattern, std::set<std::set<size_t>> * dstates, Transitions * dtran);
+
+void build_transition_table(std::set<std::set<size_t>> dstates, Transitions dtran,
+                            std::vector<size_t> * next_state, std::vector<size_t> * check,
+                            std::vector<size_t> * base);
 
 DFA regex_to_dfa(std::string pattern);

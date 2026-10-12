@@ -13,7 +13,7 @@ static int n_fail = 0;
         }                                                          \
     } while (0)
 
-using positions = std::set<int>;
+using positions = std::set<size_t>;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -92,20 +92,39 @@ static void check_parse(const std::string &           pattern,
 }
 
 struct analyzed {
-    Node *                     root;
-    std::vector<char32_t>      symbol_at;
-    std::vector<std::set<int>> followpos;
+    std::set<positions> dstates;
+    Transitions          dtran;
 };
 
-// Parse, augment and annotate a pattern
+// Build states and transitions for a pattern
 static analyzed analyze(std::string pattern) {
     analyzed a;
-    Parser   p{ pattern, &a.symbol_at };
-    Node *   tree = p.parse();
-    a.root        = augment_pattern(tree, &a.symbol_at);
-    a.followpos.resize(a.symbol_at.size());
-    regex_annotate(a.root, &a.followpos);
+    followpos(pattern, &a.dstates, &a.dtran);
     return a;
+}
+
+static bool has_transition(const analyzed & a, const positions & from, char32_t symbol, const positions & to) {
+    auto state = a.dtran.find(from);
+    if (state == a.dtran.end()) {
+        return false;
+    }
+    for (const auto & transition : state->second) {
+        if (transition.symbol == symbol && transition.to == to) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static size_t packed_transition(const DFA & dfa, size_t state, char32_t symbol) {
+    if (state >= dfa.base.size()) {
+        return 0;
+    }
+    size_t index = dfa.base[state] + symbol;
+    if (index >= dfa.check.size() || dfa.check[index] != state) {
+        return 0;
+    }
+    return dfa.next_state[index];
 }
 
 // Run one test; an exception (such as "not implemented") counts as a failure
@@ -178,7 +197,7 @@ static void test_parse_full() {
 
 static void test_annotate_epsilon() {  // (e)#
     auto                       root = cat(eps(), leaf(0, '#'));
-    std::vector<std::set<int>> followpos(1);
+    std::vector<std::set<size_t>> followpos(1);
 
     regex_annotate(root, &followpos);
 
@@ -194,7 +213,7 @@ static void test_annotate_epsilon() {  // (e)#
 
 static void test_annotate_alternation() {  // (a|b)#
     auto                       root = cat(alt(leaf(0, 'a'), leaf(1, 'b')), leaf(2, '#'));
-    std::vector<std::set<int>> followpos(3);
+    std::vector<std::set<size_t>> followpos(3);
 
     regex_annotate(root, &followpos);
 
@@ -209,7 +228,7 @@ static void test_annotate_alternation() {  // (a|b)#
 
 static void test_annotate_concat_repetition() {  // (ab*)#
     auto                       root = cat(cat(leaf(0, 'a'), star(leaf(1, 'b'))), leaf(2, '#'));
-    std::vector<std::set<int>> followpos(3);
+    std::vector<std::set<size_t>> followpos(3);
 
     regex_annotate(root, &followpos);
 
@@ -224,7 +243,7 @@ static void test_annotate_concat_repetition() {  // (ab*)#
 
 static void test_annotate_star_of_alternation() {  // ((a|b)*)#
     auto                       root = cat(star(alt(leaf(0, 'a'), leaf(1, 'b'))), leaf(2, '#'));
-    std::vector<std::set<int>> followpos(3);
+    std::vector<std::set<size_t>> followpos(3);
 
     regex_annotate(root, &followpos);
 
@@ -239,63 +258,90 @@ static void test_annotate_star_of_alternation() {  // ((a|b)*)#
 }
 
 // ---------------------------------------------------------------------------
-// End-to-end: parse + annotate
+// End-to-end: parse + followpos state construction
 // ---------------------------------------------------------------------------
 
 static void test_empty() {
-    analyzed a = analyze("");  // parses as (epsilon)#
-    CHECK(!a.root->nullable);
-    CHECK(a.root->firstpos == positions({ 0 }));
-    CHECK(a.root->lastpos == positions({ 0 }));
-    CHECK(a.followpos[0].empty());
+    analyzed a = analyze("");
+    CHECK(a.dstates == std::set<positions>({ positions({ 0 }) }));
+    CHECK(a.dtran.at(positions({ 0 })).empty());
 }
 
 static void test_symbol() {  // a#
     analyzed a = analyze("a");
-    CHECK(!a.root->nullable);
-    CHECK(a.root->firstpos == positions({ 0 }));
-    CHECK(a.root->lastpos == positions({ 1 }));
-    CHECK(a.followpos[0] == positions({ 1 }));
-    CHECK(a.followpos[1].empty());
+    CHECK(a.dstates == std::set<positions>({ positions({ 0 }), positions({ 1 }) }));
+    CHECK(has_transition(a, positions({ 0 }), 'a', positions({ 1 })));
 }
 
 static void test_alternation() {  // (a|b)#
     analyzed a = analyze("a|b");
-    CHECK(!a.root->nullable);
-    CHECK(a.root->firstpos == positions({ 0, 1 }));
-    CHECK(a.root->lastpos == positions({ 2 }));
-    CHECK(a.followpos[0] == positions({ 2 }));
-    CHECK(a.followpos[1] == positions({ 2 }));
-    CHECK(a.followpos[2].empty());
+    CHECK(a.dstates == std::set<positions>({ positions({ 0, 1 }), positions({ 2 }) }));
+    CHECK(has_transition(a, positions({ 0, 1 }), 'a', positions({ 2 })));
+    CHECK(has_transition(a, positions({ 0, 1 }), 'b', positions({ 2 })));
 }
 
 static void test_concatenation() {  // (ab)#
     analyzed a = analyze("ab");
-    CHECK(!a.root->nullable);
-    CHECK(a.root->firstpos == positions({ 0 }));
-    CHECK(a.root->lastpos == positions({ 2 }));
-    CHECK(a.followpos[0] == positions({ 1 }));
-    CHECK(a.followpos[1] == positions({ 2 }));
-    CHECK(a.followpos[2].empty());
+    CHECK(a.dstates == std::set<positions>({ positions({ 0 }), positions({ 1 }), positions({ 2 }) }));
+    CHECK(has_transition(a, positions({ 0 }), 'a', positions({ 1 })));
+    CHECK(has_transition(a, positions({ 1 }), 'b', positions({ 2 })));
 }
 
 static void test_repetition() {  // (a*)#
     analyzed a = analyze("a*");
-    CHECK(!a.root->nullable);
-    CHECK(a.root->firstpos == positions({ 0, 1 }));
-    CHECK(a.root->lastpos == positions({ 1 }));
-    CHECK(a.followpos[0] == positions({ 0, 1 }));
-    CHECK(a.followpos[1].empty());
+    CHECK(a.dstates == std::set<positions>({ positions({ 0, 1 }) }));
+    CHECK(has_transition(a, positions({ 0, 1 }), 'a', positions({ 0, 1 })));
 }
 
 static void test_concat_repetition() {  // (ab*)#
     analyzed a = analyze("ab*");
-    CHECK(!a.root->nullable);
-    CHECK(a.root->firstpos == positions({ 0 }));
-    CHECK(a.root->lastpos == positions({ 2 }));
-    CHECK(a.followpos[0] == positions({ 1, 2 }));
-    CHECK(a.followpos[1] == positions({ 1, 2 }));
-    CHECK(a.followpos[2].empty());
+    CHECK(a.dstates == std::set<positions>({ positions({ 0 }), positions({ 1, 2 }) }));
+    CHECK(has_transition(a, positions({ 0 }), 'a', positions({ 1, 2 })));
+    CHECK(has_transition(a, positions({ 1, 2 }), 'b', positions({ 1, 2 })));
+}
+
+static void test_build_transition_table() {
+    std::set<positions> dstates = { positions({ 1 }), positions({ 2 }), positions({ 3 }), positions({ 4 }) };
+    Transitions dtran;
+    dtran[positions({ 1 })] = { { positions({ 2 }), 'a' }, { positions({ 3 }), 'b' }, { positions({ 4 }), 'c' } };
+    dtran[positions({ 2 })] = { { positions({ 3 }), 'a' }, { positions({ 4 }), 'b' } };
+    dtran[positions({ 3 })] = { { positions({ 1 }), 'c' } };
+    dtran[positions({ 4 })] = {};
+
+    std::vector<size_t> next_state;
+    std::vector<size_t> check;
+    std::vector<size_t> base = { 0 };
+    build_transition_table(dstates, dtran, &next_state, &check, &base);
+    DFA dfa{ next_state, check, base };
+
+    CHECK(dfa.base.size() == 5);
+    CHECK(packed_transition(dfa, 1, 'a') == 2);
+    CHECK(packed_transition(dfa, 1, 'b') == 3);
+    CHECK(packed_transition(dfa, 1, 'c') == 4);
+    CHECK(packed_transition(dfa, 2, 'a') == 3);
+    CHECK(packed_transition(dfa, 2, 'b') == 4);
+    CHECK(packed_transition(dfa, 3, 'c') == 1);
+    CHECK(packed_transition(dfa, 4, 'a') == 0);
+    CHECK(dfa.base[1] != dfa.base[2]);
+}
+
+static void test_regex_to_dfa_alternation_concat() {
+    DFA dfa = regex_to_dfa("a|bc");
+
+    CHECK(dfa.base.size() == 4);
+    CHECK(packed_transition(dfa, 1, 'a') == 3);
+    CHECK(packed_transition(dfa, 1, 'b') == 2);
+    CHECK(packed_transition(dfa, 2, 'c') == 3);
+    CHECK(packed_transition(dfa, 1, 'c') == 0);
+    CHECK(packed_transition(dfa, 2, 'a') == 0);
+}
+
+static void test_regex_to_dfa_repetition() {
+    DFA dfa = regex_to_dfa("a*");
+
+    CHECK(dfa.base.size() == 2);
+    CHECK(packed_transition(dfa, 1, 'a') == 1);
+    CHECK(packed_transition(dfa, 1, 'b') == 0);
 }
 
 int main() {
@@ -323,6 +369,9 @@ int main() {
     run("concatenation", test_concatenation);
     run("repetition", test_repetition);
     run("concat_repetition", test_concat_repetition);
+    run("build_transition_table", test_build_transition_table);
+    run("regex_to_dfa_alternation_concat", test_regex_to_dfa_alternation_concat);
+    run("regex_to_dfa_repetition", test_regex_to_dfa_repetition);
 
     return n_fail == 0 ? 0 : 1;
 }
