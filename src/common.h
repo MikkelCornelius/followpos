@@ -52,9 +52,12 @@ struct Transition {
 };
 
 struct DFA {
+    std::set<char32_t>  alphabet;
     std::vector<size_t> next_state;
     std::vector<size_t> check;
     std::vector<size_t> base;
+    size_t              initstate;
+    std::set<size_t>    accepting = {};
 };
 
 using Transitions = std::map<std::set<size_t>, std::vector<Transition>>;
@@ -63,15 +66,17 @@ Node * augment_pattern(Node * old_root, std::vector<char32_t> & symbol_at);
 
 void regex_annotate(Node & node, std::vector<std::set<size_t>> & followpos);
 
-void followpos(std::string pattern,
-               std::set<char32_t> & alphabet,
+void followpos(std::string                  pattern,
+               DFA &                        dfa,
+               std::set<size_t> &           initial_state_positions,
+               std::set<std::set<size_t>> & accepting_state_positions,
                std::set<std::set<size_t>> & dstates,
-               Transitions & dtran);
+               Transitions &                dtran);
 
-void build_transition_table(std::set<std::set<size_t>> dstates,
-                            Transitions                dtran,
-                            std::vector<size_t> &      next_state,
-                            std::vector<size_t> &      check,
-                            std::vector<size_t> &      base);
+void build_transition_table(std::set<std::set<size_t>>         dstates,
+                            Transitions                        dtran,
+                            DFA &                              dfa,
+                            const std::set<size_t> &           initial_state_positions,
+                            const std::set<std::set<size_t>> & accepting_state_positions);
 
 DFA regex_to_dfa(std::string pattern);

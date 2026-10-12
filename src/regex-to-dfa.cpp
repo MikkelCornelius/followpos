@@ -29,7 +29,9 @@ Node * augment_pattern(Node * old_root, std::vector<char32_t> & symbol_at) {
 }
 
 void desugar(std::string & pattern) {
-    throw std::logic_error("feature not implemented");
+    // Feature not implemented yet. Always expect regex without syntactic sugar
+    pattern = pattern;
+    return;
 }
 
 Parser::Parser(const std::string & pattern, std::vector<char32_t> & symbol_at) : s(pattern), symbol_at(symbol_at) {}
@@ -196,10 +198,12 @@ void regex_annotate(Node & node, std::vector<std::set<size_t>> & followpos) {
     }
 }
 
-void followpos(std::string pattern,
-               std::set<char32_t> & alphabet,
+void followpos(std::string                  pattern,
+               DFA &                        dfa,
+               std::set<size_t> &           initial_state_positions,
+               std::set<std::set<size_t>> & accepting_state_positions,
                std::set<std::set<size_t>> & dstates,
-               Transitions & dtran) {
+               Transitions &                dtran) {
     // Parse the pattern, and return a syntax tree of the augmented pattern (r)# aswell as a lookup table `symbol_at`
     std::vector<char32_t> symbol_at;
     symbol_at.reserve(pattern.size());
@@ -208,11 +212,14 @@ void followpos(std::string pattern,
     Node * root = augment_pattern(tree, symbol_at);
 
     // Add terminal symbols found in the regex to the caller's alphabet
-    alphabet.insert(symbol_at.begin(), symbol_at.end());
+    dfa.alphabet.insert(symbol_at.begin(), symbol_at.end());
 
     // Calculate the functions `nullable`, `firstpos`, `lastpos` and `followpos`
     std::vector<std::set<size_t>> followpos(symbol_at.size());
     regex_annotate(*root, followpos);
+
+    // Save initial state
+    initial_state_positions = root->firstpos;
 
     // Initialize with Dstates only containing firstpos(root)
     dstates.insert(root->firstpos);
@@ -224,11 +231,15 @@ void followpos(std::string pattern,
     // Run algorithm
     std::set<size_t> state;
     while (!q.empty()) {
-        state = q.front();     //pop from ToDo list
+        state = q.front();  //pop from ToDo list
         q.pop();
         dtran[state] = {};  //initialize transition function for current state
 
-        for (char32_t symbol : alphabet) {
+        if (state.find(symbol_at.size() - 1) != state.end()) {
+            accepting_state_positions.insert(state);
+        }
+
+        for (char32_t symbol : dfa.alphabet) {
             std::set<size_t> next_state;
 
             // Create a new state containing the positions that can be reached from the current state with the current symbol
@@ -253,11 +264,11 @@ void followpos(std::string pattern,
     }
 }
 
-void build_transition_table(std::set<std::set<size_t>> dstates,
-                            Transitions                dtran,
-                            std::vector<size_t> &      next_state,
-                            std::vector<size_t> &      check,
-                            std::vector<size_t> &      base) {
+void build_transition_table(std::set<std::set<size_t>>         dstates,
+                            Transitions                        dtran,
+                            DFA &                              dfa,
+                            const std::set<size_t> &           initial_state_positions,
+                            const std::set<std::set<size_t>> & accepting_state_positions) {
     // Sort states based on number of transitions comming from a state.
     //it makes packing more optimal to start with big states
     std::vector<std::set<size_t>> states(dstates.begin(), dstates.end());
@@ -273,14 +284,15 @@ void build_transition_table(std::set<std::set<size_t>> dstates,
     }
 
     // Reserve memory
-    check.resize(
+    dfa.base.push_back(0);  //state id 0 is reserved for the dead state
+    dfa.check.resize(
         states.size() +
         150);  //room for all states, plus full ASCII alphabet, plus some wiggleroom. Will probably need to resize in the following for loop
-    next_state.resize(states.size() + 150);
-    base.reserve(states.size());
+    dfa.next_state.resize(states.size() + 150);
+    dfa.base.reserve(states.size() + 1);
 
     // Pack states
-    size_t array_size = next_state.size();
+    size_t array_size = dfa.next_state.size();
     size_t state_id;
     bool   index_collision;
     for (size_t i = 0; i < states.size(); i++) {
@@ -296,10 +308,10 @@ void build_transition_table(std::set<std::set<size_t>> dstates,
                 while (offset + a >= array_size) {
                     array_size *= 2;  //if out-of-index, double the size
                 }
-                check.resize(array_size);
-                next_state.resize(array_size);
+                dfa.check.resize(array_size);
+                dfa.next_state.resize(array_size);
 
-                if (check.at(offset + a) != 0) {
+                if (dfa.check.at(offset + a) != 0) {
                     index_collision = true;
                     offset++;
                     break;
@@ -309,36 +321,39 @@ void build_transition_table(std::set<std::set<size_t>> dstates,
 
         // Pack state
         for (const auto & tran : dtran[states[i]]) {
-            char32_t a                 = tran.symbol;
-            check.at(offset + a)      = state_id;
-            next_state.at(offset + a) = id_of[tran.to];
+            char32_t a                    = tran.symbol;
+            dfa.check.at(offset + a)      = state_id;
+            dfa.next_state.at(offset + a) = id_of[tran.to];
         }
 
         // Save base for this state
-        base.push_back(offset);
+        dfa.base.push_back(offset);
+    }
+
+    dfa.initstate = id_of.at(initial_state_positions);
+    for (const auto & accepting_state : accepting_state_positions) {
+        dfa.accepting.insert(id_of.at(accepting_state));
     }
 }
 
 DFA regex_to_dfa(std::string pattern) {
     // Remove syntactic sugar
-    //desugar(pattern);
+    desugar(pattern);
 
     // Execute followpos
+    DFA                        dfa;
     std::set<std::set<size_t>> dstates = {};
-    std::set<char32_t> alphabet;
     Transitions                dtran;
-    followpos(pattern, alphabet, dstates, dtran);
+    std::set<size_t>           initial_state_positions;
+    std::set<std::set<size_t>> accepting_state_positions;
+    followpos(pattern, dfa, initial_state_positions, accepting_state_positions, dstates, dtran);
 
     // Potentially find minimal DFA
     // ...
     // Probably not worth it for the llama.cpp common case
 
     // Minimize memory usage of transition table
-    std::vector<size_t> check;
-    std::vector<size_t> next_state;
-    std::vector<size_t> base;
-    base.push_back(0);  //state id 0 is reserved for the dead state
-    build_transition_table(dstates, dtran, next_state, check, base);
+    build_transition_table(dstates, dtran, dfa, initial_state_positions, accepting_state_positions);
 
-    return { next_state, check, base };
+    return dfa;
 }

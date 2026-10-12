@@ -98,9 +98,11 @@ struct analyzed {
 
 // Build states and transitions for a pattern
 static analyzed analyze(std::string pattern) {
-    analyzed a;
-    std::set<char32_t> alphabet;
-    followpos(pattern, alphabet, a.dstates, a.dtran);
+    analyzed                   a;
+    DFA                        dfa;
+    std::set<size_t>           initial_state_positions;
+    std::set<std::set<size_t>> accepting_state_positions;
+    followpos(pattern, dfa, initial_state_positions, accepting_state_positions, a.dstates, a.dtran);
     return a;
 }
 
@@ -315,12 +317,12 @@ static void test_build_transition_table() {
     })]               = { { positions({ 1 }), 'c' } };
     dtran[positions({ 4 })] = {};
 
-    std::vector<size_t> next_state;
-    std::vector<size_t> check;
-    std::vector<size_t> base = { 0 };
-    build_transition_table(dstates, dtran, next_state, check, base);
-    DFA dfa{ next_state, check, base };
+    DFA                       dfa;
+    const positions           initial_state_positions = { 1 };
+    const std::set<positions> accepting_state_positions;
+    build_transition_table(dstates, dtran, dfa, initial_state_positions, accepting_state_positions);
 
+    CHECK(dfa.alphabet.empty());
     CHECK(dfa.base.size() == 5);
     CHECK(packed_transition(dfa, 1, 'a') == 2);
     CHECK(packed_transition(dfa, 1, 'b') == 3);
@@ -335,6 +337,7 @@ static void test_build_transition_table() {
 static void test_regex_to_dfa_alternation_concat() {
     DFA dfa = regex_to_dfa("a|bc");
 
+    CHECK(dfa.alphabet == std::set<char32_t>({ '#', 'a', 'b', 'c' }));
     CHECK(dfa.base.size() == 4);
     CHECK(packed_transition(dfa, 1, 'a') == 3);
     CHECK(packed_transition(dfa, 1, 'b') == 2);
@@ -346,6 +349,7 @@ static void test_regex_to_dfa_alternation_concat() {
 static void test_regex_to_dfa_repetition() {
     DFA dfa = regex_to_dfa("a*");
 
+    CHECK(dfa.alphabet == std::set<char32_t>({ '#', 'a' }));
     CHECK(dfa.base.size() == 2);
     CHECK(packed_transition(dfa, 1, 'a') == 1);
     CHECK(packed_transition(dfa, 1, 'b') == 0);
