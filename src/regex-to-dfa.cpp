@@ -200,7 +200,7 @@ void regex_annotate(Node & node, std::vector<std::set<size_t>> & followpos) {
 
 void followpos(std::string                  pattern,
                DFA &                        dfa,
-               std::set<size_t> &           initial_state_positions,
+               std::set<size_t> &           initial_state_position,
                std::set<std::set<size_t>> & accepting_state_positions,
                std::set<std::set<size_t>> & dstates,
                Transitions &                dtran) {
@@ -219,7 +219,7 @@ void followpos(std::string                  pattern,
     regex_annotate(*root, followpos);
 
     // Save initial state
-    initial_state_positions = root->firstpos;
+    initial_state_position = root->firstpos;
 
     // Initialize with Dstates only containing firstpos(root)
     dstates.insert(root->firstpos);
@@ -267,7 +267,7 @@ void followpos(std::string                  pattern,
 void build_transition_table(std::set<std::set<size_t>>         dstates,
                             Transitions                        dtran,
                             DFA &                              dfa,
-                            const std::set<size_t> &           initial_state_positions,
+                            const std::set<size_t> &           initial_state_position,
                             const std::set<std::set<size_t>> & accepting_state_positions) {
     // Sort states based on number of transitions comming from a state.
     //it makes packing more optimal to start with big states
@@ -330,7 +330,7 @@ void build_transition_table(std::set<std::set<size_t>>         dstates,
         dfa.base.push_back(offset);
     }
 
-    dfa.initstate = id_of.at(initial_state_positions);
+    dfa.initstate = id_of.at(initial_state_position);
     for (const auto & accepting_state : accepting_state_positions) {
         dfa.accepting.insert(id_of.at(accepting_state));
     }
@@ -344,16 +344,16 @@ DFA regex_to_dfa(std::string pattern) {
     DFA                        dfa;
     std::set<std::set<size_t>> dstates = {};
     Transitions                dtran;
-    std::set<size_t>           initial_state_positions;
+    std::set<size_t>           initial_state_position;
     std::set<std::set<size_t>> accepting_state_positions;
-    followpos(pattern, dfa, initial_state_positions, accepting_state_positions, dstates, dtran);
+    followpos(pattern, dfa, initial_state_position, accepting_state_positions, dstates, dtran);
 
     // Potentially find minimal DFA
     // ...
     // Probably not worth it for the llama.cpp common case
 
     // Minimize memory usage of transition table
-    build_transition_table(dstates, dtran, dfa, initial_state_positions, accepting_state_positions);
+    build_transition_table(dstates, dtran, dfa, initial_state_position, accepting_state_positions);
 
     return dfa;
 }
