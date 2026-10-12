@@ -1,11 +1,11 @@
 #pragma once
 
+#include <algorithm>  //for a sorting algorithm. A non-sorted vector would also be okay
 #include <map>
 #include <queue>
 #include <set>
 #include <string>
 #include <vector>
-#include <algorithm> //for a sorting algorithm. A non-sorted vector would also be okay
 
 enum regex_node_type {
     REGEX_NODE_EPSILON       = 0,
@@ -16,14 +16,14 @@ enum regex_node_type {
 };
 
 struct Node {
-    regex_node_type type        = REGEX_NODE_EPSILON;
-    char32_t        value       = '\0';
-    int             position    = -1;
-    Node *          left_child  = nullptr;
-    Node *          right_child = nullptr;
-    bool            nullable;
-    std::set<size_t>   firstpos;
-    std::set<size_t>   lastpos;
+    regex_node_type  type        = REGEX_NODE_EPSILON;
+    char32_t         value       = '\0';
+    int              position    = -1;
+    Node *           left_child  = nullptr;
+    Node *           right_child = nullptr;
+    bool             nullable;
+    std::set<size_t> firstpos;
+    std::set<size_t> lastpos;
 };
 
 void free_tree(Node * node);
@@ -48,7 +48,7 @@ struct Parser {
 
 struct Transition {
     std::set<size_t> to;
-    char32_t      symbol;
+    char32_t         symbol;
 };
 
 struct DFA {
@@ -65,8 +65,10 @@ void regex_annotate(Node * node, std::vector<std::set<size_t>> * followpos);
 
 void followpos(std::string pattern, std::set<std::set<size_t>> * dstates, Transitions * dtran);
 
-void build_transition_table(std::set<std::set<size_t>> dstates, Transitions dtran,
-                            std::vector<size_t> * next_state, std::vector<size_t> * check,
-                            std::vector<size_t> * base);
+void build_transition_table(std::set<std::set<size_t>> dstates,
+                            Transitions                dtran,
+                            std::vector<size_t> *      next_state,
+                            std::vector<size_t> *      check,
+                            std::vector<size_t> *      base);
 
 DFA regex_to_dfa(std::string pattern);

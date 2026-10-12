@@ -221,7 +221,7 @@ void followpos(std::string pattern, std::set<std::set<size_t>> * dstates, Transi
     // Run algorithm
     std::set<size_t> state;
     while (!q.empty()) {
-        state = q.front();  //pop from ToDo list
+        state = q.front();     //pop from ToDo list
         q.pop();
         (*dtran)[state] = {};  //initialize transition function for current state
 
@@ -250,32 +250,36 @@ void followpos(std::string pattern, std::set<std::set<size_t>> * dstates, Transi
     }
 }
 
-void build_transition_table(std::set<std::set<size_t>> dstates, Transitions dtran, std::vector<size_t> * next_state, std::vector<size_t> * check, std::vector<size_t> * base) {
-    
+void build_transition_table(std::set<std::set<size_t>> dstates,
+                            Transitions                dtran,
+                            std::vector<size_t> *      next_state,
+                            std::vector<size_t> *      check,
+                            std::vector<size_t> *      base) {
     // Sort states based on number of transitions comming from a state.
     //it makes packing more optimal to start with big states
     std::vector<std::set<size_t>> states(dstates.begin(), dstates.end());
-    std::sort(states.begin(), states.end(),
-        [&](const std::set<size_t>& a, const std::set<size_t>& b) {
-            return dtran.at(a).size() > dtran.at(b).size();
-        });
+    std::sort(states.begin(), states.end(), [&](const std::set<size_t> & a, const std::set<size_t> & b) {
+        return dtran.at(a).size() > dtran.at(b).size();
+    });
 
     // Now we can use vector indeces as state IDs instead of the full set
     // Create map from state "name" to ID
     std::map<std::set<size_t>, size_t> id_of;
     for (size_t i = 0; i < states.size(); ++i) {
-        id_of[states[i]] = i + 1; // id 0 is reserved for the dead state
+        id_of[states[i]] = i + 1;  // id 0 is reserved for the dead state
     }
 
     // Reserve memory
-    check->resize(states.size()+150); //room for all states, plus full ASCII alphabet, plus some wiggleroom. Will probably need to resize in the following for loop
-    next_state->resize(states.size()+150);
+    check->resize(
+        states.size() +
+        150);  //room for all states, plus full ASCII alphabet, plus some wiggleroom. Will probably need to resize in the following for loop
+    next_state->resize(states.size() + 150);
     base->reserve(states.size());
 
     // Pack states
     size_t array_size = next_state->size();
     size_t state_id;
-    bool index_collision;
+    bool   index_collision;
     for (size_t i = 0; i < states.size(); i++) {
         state_id = i + 1;
 
@@ -283,14 +287,16 @@ void build_transition_table(std::set<std::set<size_t>> dstates, Transitions dtra
         size_t offset = 0;
         do {
             index_collision = false;
-            for (const auto& tran : dtran[states[i]]) {
+            for (const auto & tran : dtran[states[i]]) {
                 char32_t a = tran.symbol;
 
-                while (offset + a >= array_size) array_size *= 2; //if out-of-index, double the size
+                while (offset + a >= array_size) {
+                    array_size *= 2;  //if out-of-index, double the size
+                }
                 check->resize(array_size);
                 next_state->resize(array_size);
 
-                if (check->at(offset+a) != 0) {
+                if (check->at(offset + a) != 0) {
                     index_collision = true;
                     offset++;
                     break;
@@ -299,10 +305,10 @@ void build_transition_table(std::set<std::set<size_t>> dstates, Transitions dtra
         } while (index_collision);
 
         // Pack state
-        for (const auto& tran : dtran[states[i]]) {
-            char32_t a = tran.symbol;
-            check->at(offset+a) = state_id;
-            next_state->at(offset+a) = id_of[tran.to];
+        for (const auto & tran : dtran[states[i]]) {
+            char32_t a                 = tran.symbol;
+            check->at(offset + a)      = state_id;
+            next_state->at(offset + a) = id_of[tran.to];
         }
 
         // Save base for this state
@@ -316,7 +322,7 @@ DFA regex_to_dfa(std::string pattern) {
 
     // Execute followpos
     std::set<std::set<size_t>> dstates = {};
-    Transitions dtran;
+    Transitions                dtran;
     followpos(pattern, &dstates, &dtran);
 
     // Potentially find minimal DFA
@@ -327,8 +333,8 @@ DFA regex_to_dfa(std::string pattern) {
     std::vector<size_t> check;
     std::vector<size_t> next_state;
     std::vector<size_t> base;
-    base.push_back(0); //state id 0 is reserved for the dead state
+    base.push_back(0);  //state id 0 is reserved for the dead state
     build_transition_table(dstates, dtran, &next_state, &check, &base);
 
-    return {next_state, check, base};
+    return { next_state, check, base };
 }

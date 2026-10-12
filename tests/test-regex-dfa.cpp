@@ -93,7 +93,7 @@ static void check_parse(const std::string &           pattern,
 
 struct analyzed {
     std::set<positions> dstates;
-    Transitions          dtran;
+    Transitions         dtran;
 };
 
 // Build states and transitions for a pattern
@@ -196,7 +196,7 @@ static void test_parse_full() {
 // ---------------------------------------------------------------------------
 
 static void test_annotate_epsilon() {  // (e)#
-    auto                       root = cat(eps(), leaf(0, '#'));
+    auto                          root = cat(eps(), leaf(0, '#'));
     std::vector<std::set<size_t>> followpos(1);
 
     regex_annotate(root, &followpos);
@@ -212,7 +212,7 @@ static void test_annotate_epsilon() {  // (e)#
 }
 
 static void test_annotate_alternation() {  // (a|b)#
-    auto                       root = cat(alt(leaf(0, 'a'), leaf(1, 'b')), leaf(2, '#'));
+    auto                          root = cat(alt(leaf(0, 'a'), leaf(1, 'b')), leaf(2, '#'));
     std::vector<std::set<size_t>> followpos(3);
 
     regex_annotate(root, &followpos);
@@ -227,7 +227,7 @@ static void test_annotate_alternation() {  // (a|b)#
 }
 
 static void test_annotate_concat_repetition() {  // (ab*)#
-    auto                       root = cat(cat(leaf(0, 'a'), star(leaf(1, 'b'))), leaf(2, '#'));
+    auto                          root = cat(cat(leaf(0, 'a'), star(leaf(1, 'b'))), leaf(2, '#'));
     std::vector<std::set<size_t>> followpos(3);
 
     regex_annotate(root, &followpos);
@@ -242,7 +242,7 @@ static void test_annotate_concat_repetition() {  // (ab*)#
 }
 
 static void test_annotate_star_of_alternation() {  // ((a|b)*)#
-    auto                       root = cat(star(alt(leaf(0, 'a'), leaf(1, 'b'))), leaf(2, '#'));
+    auto                          root = cat(star(alt(leaf(0, 'a'), leaf(1, 'b'))), leaf(2, '#'));
     std::vector<std::set<size_t>> followpos(3);
 
     regex_annotate(root, &followpos);
@@ -302,10 +302,16 @@ static void test_concat_repetition() {  // (ab*)#
 
 static void test_build_transition_table() {
     std::set<positions> dstates = { positions({ 1 }), positions({ 2 }), positions({ 3 }), positions({ 4 }) };
-    Transitions dtran;
-    dtran[positions({ 1 })] = { { positions({ 2 }), 'a' }, { positions({ 3 }), 'b' }, { positions({ 4 }), 'c' } };
-    dtran[positions({ 2 })] = { { positions({ 3 }), 'a' }, { positions({ 4 }), 'b' } };
-    dtran[positions({ 3 })] = { { positions({ 1 }), 'c' } };
+    Transitions         dtran;
+    dtran[positions({
+        1
+    })]               = { { positions({ 2 }), 'a' }, { positions({ 3 }), 'b' }, { positions({ 4 }), 'c' } };
+    dtran[positions({
+        2
+    })]               = { { positions({ 3 }), 'a' }, { positions({ 4 }), 'b' } };
+    dtran[positions({
+        3
+    })]               = { { positions({ 1 }), 'c' } };
     dtran[positions({ 4 })] = {};
 
     std::vector<size_t> next_state;
