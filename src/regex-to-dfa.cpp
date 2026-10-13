@@ -199,7 +199,7 @@ void regex_annotate(Node & node, std::vector<std::set<size_t>> & followpos) {
 }
 
 void followpos(std::string                  pattern,
-               DFA &                        dfa,
+               std::set<char32_t> &         alphabet,
                std::set<size_t> &           initial_state_position,
                std::set<std::set<size_t>> & accepting_state_positions,
                std::set<std::set<size_t>> & dstates,
@@ -212,7 +212,7 @@ void followpos(std::string                  pattern,
     Node * root = augment_pattern(tree, symbol_at);
 
     // Add terminal symbols found in the regex to the caller's alphabet
-    dfa.alphabet.insert(symbol_at.begin(), symbol_at.end());
+    alphabet.insert(symbol_at.begin(), symbol_at.end());
 
     // Calculate the functions `nullable`, `firstpos`, `lastpos` and `followpos`
     std::vector<std::set<size_t>> followpos(symbol_at.size());
@@ -239,7 +239,7 @@ void followpos(std::string                  pattern,
             accepting_state_positions.insert(state);
         }
 
-        for (char32_t symbol : dfa.alphabet) {
+        for (char32_t symbol : alphabet) {
             std::set<size_t> next_state;
 
             // Create a new state containing the positions that can be reached from the current state with the current symbol
@@ -346,7 +346,7 @@ DFA regex_to_dfa(std::string pattern) {
     Transitions                dtran;
     std::set<size_t>           initial_state_position;
     std::set<std::set<size_t>> accepting_state_positions;
-    followpos(pattern, dfa, initial_state_position, accepting_state_positions, dstates, dtran);
+    followpos(pattern, dfa.alphabet, initial_state_position, accepting_state_positions, dstates, dtran);
 
     // Potentially find minimal DFA
     // ...

@@ -67,7 +67,7 @@ Node * augment_pattern(Node * old_root, std::vector<char32_t> & symbol_at);
 void regex_annotate(Node & node, std::vector<std::set<size_t>> & followpos);
 
 void followpos(std::string                  pattern,
-               DFA &                        dfa,
+               std::set<char32_t> &         alphabet,
                std::set<size_t> &           initial_state_positions,
                std::set<std::set<size_t>> & accepting_state_positions,
                std::set<std::set<size_t>> & dstates,

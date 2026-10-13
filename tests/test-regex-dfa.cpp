@@ -102,7 +102,7 @@ static analyzed analyze(std::string pattern) {
     DFA                        dfa;
     std::set<size_t>           initial_state_positions;
     std::set<std::set<size_t>> accepting_state_positions;
-    followpos(pattern, dfa, initial_state_positions, accepting_state_positions, a.dstates, a.dtran);
+    followpos(pattern, dfa.alphabet, initial_state_positions, accepting_state_positions, a.dstates, a.dtran);
     return a;
 }
 
