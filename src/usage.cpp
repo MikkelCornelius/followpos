@@ -6,6 +6,7 @@ std::vector<std::string> content = {"<think>", "\\n", "Okay", ",", "the", "user"
 std::string              pat     = "<tool_call>";
 
 bool advance_dfa(DFA & dfa, size_t & current_state, char32_t character) {
+    // TODO there might be a bug if `character` is outside the alphabet
     if (current_state >= dfa.base.size()) {
         return false;
     }

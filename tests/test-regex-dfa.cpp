@@ -143,6 +143,16 @@ static void run(const char * name, void (*fn)()) {
 }
 
 // ---------------------------------------------------------------------------
+// Desugaring tests
+// ---------------------------------------------------------------------------
+
+static void test_desugar_plus() {
+    std::string pattern = "a+";
+    desugar(pattern);
+    CHECK(pattern == "aa*");
+}
+
+// ---------------------------------------------------------------------------
 // Parser tests (one per case, so one failure doesn't hide the others)
 // ---------------------------------------------------------------------------
 
@@ -356,6 +366,8 @@ static void test_regex_to_dfa_repetition() {
 }
 
 int main() {
+    run("desugar_plus", test_desugar_plus);
+
     run("parse_empty", test_parse_empty);
     run("parse_symbol", test_parse_symbol);
     run("parse_concat", test_parse_concat);

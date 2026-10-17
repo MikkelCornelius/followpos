@@ -64,6 +64,8 @@ using Transitions = std::map<std::set<size_t>, std::vector<Transition>>;
 
 Node * augment_pattern(Node * old_root, std::vector<char32_t> & symbol_at);
 
+void desugar(std::string & pattern);
+
 void regex_annotate(Node & node, std::vector<std::set<size_t>> & followpos);
 
 void followpos(std::string                  pattern,

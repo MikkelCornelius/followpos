@@ -29,7 +29,22 @@ Node * augment_pattern(Node * old_root, std::vector<char32_t> & symbol_at) {
 }
 
 void desugar(std::string & pattern) {
-    // Feature not implemented yet. Always expect regex without syntactic sugar
+    std::string pattern_cpy = pattern;
+    pattern.clear();
+
+    for (char32_t c : pattern_cpy) {
+        switch (c)
+        {
+        case '+':
+            pattern += pattern.back();
+            pattern += '*';
+            break;
+        
+        default:
+            pattern += c;
+        }
+    }
+    
     pattern = pattern;
     return;
 }
