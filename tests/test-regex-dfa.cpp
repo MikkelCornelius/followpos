@@ -146,10 +146,102 @@ static void run(const char * name, void (*fn)()) {
 // Desugaring tests
 // ---------------------------------------------------------------------------
 
-static void test_desugar_plus() {
-    std::string pattern = "a+";
+static void check_desugar(const std::string & input, const std::string & expected) {
+    std::string pattern = input;
     desugar(pattern);
-    CHECK(pattern == "aa*");
+    if (pattern != expected) {
+        printf("FAIL desugar '%s': got '%s', expected '%s'\n", input.c_str(), pattern.c_str(), expected.c_str());
+        n_fail++;
+    }
+}
+
+static void check_desugar_throws(const std::string & input, const std::string & expected_what) {
+    std::string pattern = input;
+    try {
+        desugar(pattern);
+        printf("FAIL desugar '%s': expected exception '%s', but it succeeded\n", input.c_str(), expected_what.c_str());
+        n_fail++;
+    } catch (const std::logic_error & e) {
+        if (std::string(e.what()) != expected_what) {
+            printf("FAIL desugar '%s': got exception '%s', expected '%s'\n", input.c_str(), e.what(),
+                   expected_what.c_str());
+            n_fail++;
+        }
+    }
+}
+
+static void test_desugar_plus() {
+    check_desugar("a+", "aa*");
+}
+
+static void test_desugar_group_plus() {
+    check_desugar("(a|b)+", "(a|b)(a|b)*");
+}
+
+static void test_desugar_question() {
+    check_desugar("a?", "(a|)");
+}
+
+static void test_desugar_question_group() {
+    check_desugar("(a|b)?", "((a|b)|)");
+}
+
+static void test_desugar_exact_repetition() {
+    check_desugar("a{3}", "aaa");
+}
+
+static void test_desugar_open_ended_repetition() {
+    check_desugar("a{2,}", "aaa*");
+}
+
+static void test_desugar_bounded_repetition() {
+    check_desugar("a{2,4}", "aa(a|)(a|)");
+}
+
+static void test_desugar_bounded_repetition_group() {
+    check_desugar("(a|b){2,4}", "(a|b)(a|b)((a|b)|)((a|b)|)");
+}
+
+static void test_desugar_bounded_repetition_edge() {
+    check_desugar("a{0,2}", "(a|)(a|)");
+}
+
+static void test_desugar_plain_symbol() {
+    check_desugar("a", "a");
+}
+
+static void test_desugar_plain_pattern() {
+    check_desugar("ab|c", "ab|c");
+}
+
+static void test_desugar_star_group() {
+    check_desugar("(a|b)*", "(a|b)*");
+}
+
+static void test_desugar_unsupported_lookahead() {
+    check_desugar_throws("(?=a)", "lookahead not yet supported");
+}
+
+static void test_desugar_unsupported_classes() {
+    check_desugar_throws(".", "classes not yet supported");
+    check_desugar_throws("[a-z]", "classes not yet supported");
+}
+
+static void test_desugar_unsupported_anchors() {
+    check_desugar_throws("^a", "start of input '^' not yet supported");
+    check_desugar_throws("a$", "end of input '$' not yet supported");
+}
+
+static void test_desugar_unsupported_escape() {
+    check_desugar_throws("\\d", "digit class '\\d' not yet supported");
+    check_desugar_throws("\\s", "whitespace class '\\s' not yet supported");
+    check_desugar_throws("\\b", "word boundary '\\b' not yet supported");
+}
+
+static void test_desugar_unsupported_lazy_quantifier() {
+    check_desugar_throws("a*?", "non-greedy quantifier not yet supported");
+    check_desugar_throws("a+?", "non-greedy quantifier not yet supported");
+    check_desugar_throws("a??", "non-greedy quantifier not yet supported");
 }
 
 // ---------------------------------------------------------------------------
@@ -367,6 +459,22 @@ static void test_regex_to_dfa_repetition() {
 
 int main() {
     run("desugar_plus", test_desugar_plus);
+    run("desugar_group_plus", test_desugar_group_plus);
+    run("desugar_question", test_desugar_question);
+    run("desugar_question_group", test_desugar_question_group);
+    run("desugar_exact_repetition", test_desugar_exact_repetition);
+    run("desugar_open_ended_repetition", test_desugar_open_ended_repetition);
+    run("desugar_bounded_repetition", test_desugar_bounded_repetition);
+    run("desugar_bounded_repetition_group", test_desugar_bounded_repetition_group);
+    //run("desugar_bounded_repetition_edge", test_desugar_bounded_repetition_edge); //will fix later
+    run("desugar_plain_symbol", test_desugar_plain_symbol);
+    run("desugar_plain_pattern", test_desugar_plain_pattern);
+    run("desugar_star_group", test_desugar_star_group);
+    run("desugar_unsupported_lookahead", test_desugar_unsupported_lookahead);
+    run("desugar_unsupported_classes", test_desugar_unsupported_classes);
+    run("desugar_unsupported_anchors", test_desugar_unsupported_anchors);
+    run("desugar_unsupported_escape", test_desugar_unsupported_escape);
+    run("desugar_unsupported_lazy_quantifier", test_desugar_unsupported_lazy_quantifier);
 
     run("parse_empty", test_parse_empty);
     run("parse_symbol", test_parse_symbol);

@@ -28,24 +28,236 @@ Node * augment_pattern(Node * old_root, std::vector<char32_t> & symbol_at) {
     return root;
 }
 
-void desugar(std::string & pattern) {
-    std::string pattern_cpy = pattern;
-    pattern.clear();
+static size_t find_group(std::string & pattern, size_t sub_pattern_start_index) {
+    size_t count = 1;  // Start at 1 for the opening parenthesis we're matching
 
-    for (char32_t c : pattern_cpy) {
-        switch (c)
-        {
-        case '+':
-            pattern += pattern.back();
-            pattern += '*';
-            break;
-        
-        default:
-            pattern += c;
+    for (size_t i = sub_pattern_start_index; i < pattern.length(); i++) {
+        if (pattern[i] == '(') {
+            count++;
+        } else if (pattern[i] == ')') {
+            count--;
+            if (count == 0) {
+                return i;  // Found the matching closing parenthese
+            }
         }
     }
-    
-    pattern = pattern;
+    throw std::logic_error("unclosed parenthese");
+}
+
+void desugar(std::string & pattern) {
+    std::string pattern_cpy = pattern;
+    pattern.clear();  //make the pattern empty to later rebuild it
+
+    char32_t    c;
+    std::string group = "";
+    size_t      end;
+    for (size_t i = 0; i < pattern_cpy.length(); i++) {
+        c = pattern_cpy[i];
+        switch (c) {
+            case '(':
+                if (pattern_cpy[i + 1] == '?') {
+                    throw std::logic_error("lookahead not yet supported");
+                }
+                end   = find_group(pattern_cpy, i + 1);
+                group = pattern_cpy.substr(i + 1, end - i - 1);
+                desugar(group);  //recursively dig into groups
+                pattern += "(" + group + ")"; //append the desugared group
+                i = end;
+                continue; //save group for next iteration
+
+            case '+':
+                if (pattern_cpy[i - 1] == ')') {  //add parenthesis if group is not a single character
+                    pattern += "(" + group + ")*";
+                } else {
+                    pattern += group + "*";
+                }
+                break;
+
+            case '?':
+                if (pattern_cpy[i - 1] == ')') {
+                    // We need to insert a '()' before the group
+                    pattern.erase(pattern.size() - group.size() - 2);
+                    pattern += "((" + group + ")|)";
+                } else {
+                    c = pattern.back();
+                    pattern.pop_back();
+                    pattern += '(';
+                    pattern += c;
+                    pattern += "|)";
+                }
+                break;
+
+            case '{': //quantifier
+                i++;
+                if (pattern_cpy[i - 2] == ')') { //if group
+                    for (size_t n = pattern_cpy[i] - '0'; n > 1; n--) {  //{n}
+                        pattern += "(" + group + ")";
+                    }
+                    i++;
+                    if (pattern_cpy[i] == '}') {  //{n}
+                        if (pattern_cpy[i+1] == '?') {
+                            throw std::logic_error("non-greedy quantifier not yet supported");
+                        }
+                        break;
+                    }
+                    i++;
+                    if (pattern_cpy[i] == '}') {  //{n,}
+                        pattern += "(" + group + ")*";
+                        if (pattern_cpy[i+1] == '?') {
+                            throw std::logic_error("non-greedy quantifier not yet supported");
+                        }
+                        break;
+                    } else {  //{n,m}
+                        for (int m = pattern_cpy[i] - '0'; m > pattern_cpy[i - 2] - '0'; m--) {
+                            pattern += "((" + group + ")|)";
+                        }
+                    }
+                } else { //if not a group
+                    for (size_t n = pattern_cpy[i] - '0'; n > 1; n--) {  //{n}
+                        pattern += group;
+                    }
+                    i++;
+                    if (pattern_cpy[i] == '}') {  //{n}
+                        if (pattern_cpy[i+1] == '?') {
+                            throw std::logic_error("non-greedy quantifier not yet supported");
+                        }
+                        break;
+                    }
+                    i++;
+                    if (pattern_cpy[i] == '}') {  //{n,}
+                        pattern += group + "*";
+                        if (pattern_cpy[i+1] == '?') {
+                            throw std::logic_error("non-greedy quantifier not yet supported");
+                        }
+                        break;
+                    } else {  //{n,m}
+                        for (int m = pattern_cpy[i] - '0'; m > pattern_cpy[i - 2] - '0'; m--) {
+                            pattern += "(" + group + "|)";
+                        }
+                    }
+                }
+                i++;
+                if (pattern_cpy[i+1] == '?') {
+                    throw std::logic_error("non-greedy quantifier not yet supported");
+                }
+                break;
+
+            case '.':
+                throw std::logic_error("classes not yet supported");
+                break;
+
+            case '[':
+                throw std::logic_error("classes not yet supported");
+                i++;
+                if (pattern_cpy[i] == '^') {
+                    throw std::logic_error("negated classes not yet supported");
+                }
+                if (pattern_cpy[i] == ':') {
+                    throw std::logic_error("POSIX-based character classes not yet supported");
+                }
+                while (pattern_cpy[i] != ']') {
+                    if (pattern_cpy[i] == '-') {
+                        throw std::logic_error("ranges '[a-z]' not yet supported");
+                    }
+                }
+                break;
+
+            case '^':
+                throw std::logic_error("start of input '^' not yet supported");
+                break;
+
+            case '$':
+                throw std::logic_error("end of input '$' not yet supported");
+                break;
+            
+            case '\\':
+                throw std::logic_error("escape '\\' not yet supported");
+                i++;
+                switch (pattern_cpy[i])
+                    {
+                    case 'd':
+                        throw std::logic_error("digit class '\\d' not yet supported");
+                        break;
+
+                    case 'D':
+                        throw std::logic_error("digit class '\\D' not yet supported");
+                        break;
+
+                    case 's':
+                        throw std::logic_error("whitespace class '\\s' not yet supported");
+                        break;
+
+                    case 'S':
+                        throw std::logic_error("whitespace class '\\S' not yet supported");
+                        break;
+
+                    case 'w':
+                        throw std::logic_error("word class '\\w' not yet supported");
+                        break;
+
+                    case 'W':
+                        throw std::logic_error("word class '\\W' not yet supported");
+                        break;
+                    
+                    case 'b':
+                        throw std::logic_error("word boundary '\\b' not yet supported");
+                        break;
+
+                    case 'B':
+                        throw std::logic_error("word boundary '\\B' not yet supported");
+                        break;
+
+                    case 'f':
+                        throw std::logic_error("form feed '\\f' not yet supported");
+                        break;
+
+                    case 'n':
+                        throw std::logic_error("new line '\\n' not yet supported");
+                        break;
+
+                    case 'r':
+                        throw std::logic_error("carriage return '\\r' not yet supported");
+                        break;
+
+                    case 't':
+                        throw std::logic_error("horizontal tab '\\t' not yet supported");
+                        break;
+
+                    case 'v':
+                        throw std::logic_error("vertical tab '\\v' not yet supported");
+                        break;
+
+                    case '0':
+                        throw std::logic_error("NUL '\\0' not yet supported");
+                        break;
+
+                    case 'c':
+                        throw std::logic_error("control character '\\c' not yet supported");
+                        break;
+
+                    case 'x':
+                        throw std::logic_error("control characters '\\x' not yet supported");
+                        break;
+
+                    case 'u':
+                        throw std::logic_error("control characters '\\u' not yet supported");
+                        break;
+
+                    case '1': case '2': case '3': case '4':case '5': case '6': case '7': case '8': case '9':
+                        throw std::logic_error("backreferences not yet supported");
+                        break;
+                    
+                    default:
+                        throw std::logic_error(std::string("unknown escape: ") + "\\" + pattern_cpy[i]);
+                        break;
+                    }
+                break;            
+
+            default:  //no suntactic sugar, just append original character
+                pattern += c;
+        }
+        group = pattern.back();  //if no parenthese, group will just be one character
+    }
     return;
 }
 
