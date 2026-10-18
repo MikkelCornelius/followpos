@@ -60,10 +60,10 @@ void desugar(std::string & pattern) {
                 }
                 end   = find_group(pattern_cpy, i + 1);
                 group = pattern_cpy.substr(i + 1, end - i - 1);
-                desugar(group);  //recursively dig into groups
-                pattern += "(" + group + ")"; //append the desugared group
+                desugar(group);                //recursively dig into groups
+                pattern += "(" + group + ")";  //append the desugared group
                 i = end;
-                continue; //save group for next iteration
+                continue;                      //save group for next iteration
 
             case '+':
                 if (pattern_cpy[i - 1] == ')') {  //add parenthesis if group is not a single character
@@ -87,15 +87,15 @@ void desugar(std::string & pattern) {
                 }
                 break;
 
-            case '{': //quantifier
+            case '{':                                                    //quantifier
                 i++;
-                if (pattern_cpy[i - 2] == ')') { //if group
+                if (pattern_cpy[i - 2] == ')') {                         //if group
                     for (size_t n = pattern_cpy[i] - '0'; n > 1; n--) {  //{n}
                         pattern += "(" + group + ")";
                     }
                     i++;
                     if (pattern_cpy[i] == '}') {  //{n}
-                        if (pattern_cpy[i+1] == '?') {
+                        if (pattern_cpy[i + 1] == '?') {
                             throw std::logic_error("non-greedy quantifier not yet supported");
                         }
                         break;
@@ -103,7 +103,7 @@ void desugar(std::string & pattern) {
                     i++;
                     if (pattern_cpy[i] == '}') {  //{n,}
                         pattern += "(" + group + ")*";
-                        if (pattern_cpy[i+1] == '?') {
+                        if (pattern_cpy[i + 1] == '?') {
                             throw std::logic_error("non-greedy quantifier not yet supported");
                         }
                         break;
@@ -112,13 +112,13 @@ void desugar(std::string & pattern) {
                             pattern += "((" + group + ")|)";
                         }
                     }
-                } else { //if not a group
+                } else {                                                 //if not a group
                     for (size_t n = pattern_cpy[i] - '0'; n > 1; n--) {  //{n}
                         pattern += group;
                     }
                     i++;
                     if (pattern_cpy[i] == '}') {  //{n}
-                        if (pattern_cpy[i+1] == '?') {
+                        if (pattern_cpy[i + 1] == '?') {
                             throw std::logic_error("non-greedy quantifier not yet supported");
                         }
                         break;
@@ -126,7 +126,7 @@ void desugar(std::string & pattern) {
                     i++;
                     if (pattern_cpy[i] == '}') {  //{n,}
                         pattern += group + "*";
-                        if (pattern_cpy[i+1] == '?') {
+                        if (pattern_cpy[i + 1] == '?') {
                             throw std::logic_error("non-greedy quantifier not yet supported");
                         }
                         break;
@@ -137,7 +137,7 @@ void desugar(std::string & pattern) {
                     }
                 }
                 i++;
-                if (pattern_cpy[i+1] == '?') {
+                if (pattern_cpy[i + 1] == '?') {
                     throw std::logic_error("non-greedy quantifier not yet supported");
                 }
                 break;
@@ -169,12 +169,11 @@ void desugar(std::string & pattern) {
             case '$':
                 throw std::logic_error("end of input '$' not yet supported");
                 break;
-            
+
             case '\\':
                 throw std::logic_error("escape '\\' not yet supported");
                 i++;
-                switch (pattern_cpy[i])
-                    {
+                switch (pattern_cpy[i]) {
                     case 'd':
                         throw std::logic_error("digit class '\\d' not yet supported");
                         break;
@@ -198,7 +197,7 @@ void desugar(std::string & pattern) {
                     case 'W':
                         throw std::logic_error("word class '\\W' not yet supported");
                         break;
-                    
+
                     case 'b':
                         throw std::logic_error("word boundary '\\b' not yet supported");
                         break;
@@ -243,15 +242,23 @@ void desugar(std::string & pattern) {
                         throw std::logic_error("control characters '\\u' not yet supported");
                         break;
 
-                    case '1': case '2': case '3': case '4':case '5': case '6': case '7': case '8': case '9':
+                    case '1':
+                    case '2':
+                    case '3':
+                    case '4':
+                    case '5':
+                    case '6':
+                    case '7':
+                    case '8':
+                    case '9':
                         throw std::logic_error("backreferences not yet supported");
                         break;
-                    
+
                     default:
                         throw std::logic_error(std::string("unknown escape: ") + "\\" + pattern_cpy[i]);
                         break;
-                    }
-                break;            
+                }
+                break;
 
             default:  //no suntactic sugar, just append original character
                 pattern += c;
