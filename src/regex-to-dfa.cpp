@@ -159,6 +159,7 @@ void desugar(std::string & pattern) {
                     if (pattern_cpy[i] == '-') {
                         throw std::logic_error("ranges '[a-z]' not yet supported");
                     }
+                    i++;
                 }
                 break;
 
@@ -462,7 +463,7 @@ void followpos(std::string                  pattern,
 
     free_tree(root);  //syntax tree destructor
 
-    // Run algorithm
+    // NFA->DFA subset construction
     std::set<size_t> state;
     while (!q.empty()) {
         state = q.front();  //pop from ToDo list
