@@ -44,6 +44,15 @@ static size_t find_group(std::string & pattern, size_t sub_pattern_start_index) 
     throw std::logic_error("unclosed parenthese");
 }
 
+static int utf8_length(unsigned char c)
+{
+    if (c < 0x80) return 1;            // 0xxxxxxx
+    if ((c >> 5) == 0b110) return 2;   // 110xxxxx
+    if ((c >> 4) == 0b1110) return 3;  // 1110xxxx
+    if ((c >> 3) == 0b11110) return 4; // 11110xxx
+    return 1;                          // invalid or continuation byte
+}
+
 void desugar(std::string & pattern) {
     std::string pattern_cpy = pattern;
     pattern.clear();  //make the pattern empty to later rebuild it
@@ -52,6 +61,22 @@ void desugar(std::string & pattern) {
     std::string group = "";
     size_t      end;
     for (size_t i = 0; i < pattern_cpy.length(); i++) {
+
+        // Concatenate bytes if multiple bytes are required to represent current character
+        int char_size = utf8_length(pattern_cpy[i]);
+        if (char_size > 1) {
+            group.clear();
+            pattern += '(';
+            for (int j = 0; j < char_size; j++) {
+                pattern += pattern_cpy[i];
+                group += pattern_cpy[i];
+                i++;
+            }
+            i--;
+            pattern += ')';
+            continue;
+        }
+
         c = pattern_cpy[i];
         switch (c) {
             case '(':
@@ -155,12 +180,16 @@ void desugar(std::string & pattern) {
                     throw std::logic_error("POSIX-based character classes not yet supported");
                 }
 
+                // "[abc]" becomes "(a|b|c)"
                 pattern += '(';
                 while (pattern_cpy[i] != ']') {
                     if (pattern_cpy[i] == '-') {
                         throw std::logic_error("ranges '[a-z]' not yet supported");
                     }
-                    pattern += pattern_cpy[i];
+
+                    // "[æøå]" becomes "(\xc3\xa6|\xc3\xb8|\xc3\xa5)"
+                    char_size = utf8_length(pattern_cpy[i]);
+                    for (int j = 0; j < char_size; j++) pattern += pattern_cpy[i];
                     pattern += '|';
                     i++;
                 }
@@ -213,13 +242,27 @@ void desugar(std::string & pattern) {
                         break;
 
                     case 'f': //form feed
+                        pattern += '\f';
+                        break;
+
                     case 'n': //newline
+                        pattern += '\n';
+                        break;
+                        
                     case 'r': //carriage return
+                        pattern += '\r';
+                        break;
+
                     case 't': //horizontal tab
+                        pattern += '\t';
+                        break;
+
                     case 'v': //vertical tab
+                        pattern += '\v';
+                        break;
+
                     case '0': //NUL
-                        pattern += '\\';
-                        pattern += pattern_cpy[i];
+                        pattern += '\0';
                         break;
 
                     case 'c': //character (\cX)
@@ -233,6 +276,7 @@ void desugar(std::string & pattern) {
                         break;
 
                     case 'u': //character (\uHHHH)
+                        throw std::logic_error("control characters '\\u' not yet supported"); //implementation buggy
                         pattern += static_cast<char32_t>(std::stoul(pattern_cpy.substr(i+1, 4), nullptr, 16));
                         i += 4;
                         break;
