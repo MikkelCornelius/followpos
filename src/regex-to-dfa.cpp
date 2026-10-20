@@ -13,7 +13,7 @@ void free_tree(Node * node) {
 }
 
 // The augmented pattern "(r)#"
-Node * augment_pattern(Node * old_root, std::vector<char32_t> & symbol_at) {
+Node * augment_pattern(Node * old_root, std::vector<char> & symbol_at) {
     Node * special    = new Node;
     special->type     = REGEX_NODE_SYMBOL;
     special->value    = '#';
@@ -269,7 +269,7 @@ void desugar(std::string & pattern) {
     return;
 }
 
-Parser::Parser(const std::string & pattern, std::vector<char32_t> & symbol_at) : s(pattern), symbol_at(symbol_at) {}
+Parser::Parser(const std::string & pattern, std::vector<char> & symbol_at) : s(pattern), symbol_at(symbol_at) {}
 
 char Parser::peek() const {
     return i < s.size() ? s[i] : '\0';
@@ -434,13 +434,13 @@ void regex_annotate(Node & node, std::vector<std::set<size_t>> & followpos) {
 }
 
 void followpos(std::string                  pattern,
-               std::set<char32_t> &         alphabet,
+               std::set<char> &             alphabet,
                std::set<size_t> &           initial_state_position,
                std::set<std::set<size_t>> & accepting_state_positions,
                std::set<std::set<size_t>> & dstates,
                Transitions &                dtran) {
     // Parse the pattern, and return a syntax tree of the augmented pattern (r)# aswell as a lookup table `symbol_at`
-    std::vector<char32_t> symbol_at;
+    std::vector<char> symbol_at;
     symbol_at.reserve(pattern.size());
     Parser p{ pattern, symbol_at };
     Node * tree = p.parse();
@@ -474,7 +474,7 @@ void followpos(std::string                  pattern,
             accepting_state_positions.insert(state);
         }
 
-        for (char32_t symbol : alphabet) {
+        for (char symbol : alphabet) {
             std::set<size_t> next_state;
 
             // Create a new state containing the positions that can be reached from the current state with the current symbol
@@ -538,15 +538,15 @@ void build_transition_table(std::set<std::set<size_t>>         dstates,
         do {
             index_collision = false;
             for (const auto & tran : dtran[states[i]]) {
-                char32_t a = tran.symbol;
+                size_t symbol = static_cast<unsigned char>(tran.symbol);
 
-                while (offset + a >= array_size) {
+                while (offset + symbol >= array_size) {
                     array_size *= 2;  //if out-of-index, double the size
                 }
                 dfa.check.resize(array_size);
                 dfa.next_state.resize(array_size);
 
-                if (dfa.check.at(offset + a) != 0) {
+                if (dfa.check.at(offset + symbol) != 0) {
                     index_collision = true;
                     offset++;
                     break;
@@ -556,9 +556,9 @@ void build_transition_table(std::set<std::set<size_t>>         dstates,
 
         // Pack state
         for (const auto & tran : dtran[states[i]]) {
-            char32_t a                    = tran.symbol;
-            dfa.check.at(offset + a)      = state_id;
-            dfa.next_state.at(offset + a) = id_of[tran.to];
+            size_t symbol                    = static_cast<unsigned char>(tran.symbol);
+            dfa.check.at(offset + symbol)      = state_id;
+            dfa.next_state.at(offset + symbol) = id_of[tran.to];
         }
 
         // Save base for this state

@@ -36,7 +36,7 @@ static std::string to_string(const Node & n) {
 }
 
 // Hand-built syntax tree nodes (all pointers initialized, so trees are safe to free)
-static Node * leaf(int position, char32_t c) {
+static Node * leaf(int position, char c) {
     auto n         = new Node;
     n->type        = REGEX_NODE_SYMBOL;
     n->value       = c;
@@ -71,13 +71,13 @@ static Node * star(Node * c) {
 }
 
 // Parse a pattern and compare the augmented tree and symbol table
-static void check_parse(const std::string &           pattern,
-                        const std::string &           expected_tree,
-                        const std::vector<char32_t> & expected_symbols) {
-    std::vector<char32_t> symbol_at;
-    Parser                p{ pattern, symbol_at };
-    Node *                tree = p.parse();
-    Node *                root = augment_pattern(tree, symbol_at);
+static void check_parse(const std::string &       pattern,
+                        const std::string &       expected_tree,
+                        const std::vector<char> & expected_symbols) {
+    std::vector<char> symbol_at;
+    Parser            p{ pattern, symbol_at };
+    Node *            tree = p.parse();
+    Node *            root = augment_pattern(tree, symbol_at);
 
     std::string got = to_string(*root);
     if (got != expected_tree) {
@@ -106,7 +106,7 @@ static analyzed analyze(std::string pattern) {
     return a;
 }
 
-static bool has_transition(const analyzed & a, const positions & from, char32_t symbol, const positions & to) {
+static bool has_transition(const analyzed & a, const positions & from, char symbol, const positions & to) {
     auto state = a.dtran.find(from);
     if (state == a.dtran.end()) {
         return false;
@@ -119,11 +119,11 @@ static bool has_transition(const analyzed & a, const positions & from, char32_t 
     return false;
 }
 
-static size_t packed_transition(const DFA & dfa, size_t state, char32_t symbol) {
+static size_t packed_transition(const DFA & dfa, size_t state, char symbol) {
     if (state >= dfa.base.size()) {
         return 0;
     }
-    size_t index = dfa.base[state] + symbol;
+    size_t index = dfa.base[state] + static_cast<unsigned char>(symbol);
     if (index >= dfa.check.size() || dfa.check[index] != state) {
         return 0;
     }
@@ -405,6 +405,20 @@ static void test_concat_repetition() {  // (ab*)#
     CHECK(has_transition(a, positions({ 1, 2 }), 'b', positions({ 1, 2 })));
 }
 
+static void test_unicode_character() {  // (æ|øå*)#
+    analyzed          a      = analyze("æ|øå*");
+    const std::string ae     = "æ";
+    const std::string oe     = "ø";
+    const std::string a_ring = "å";
+    CHECK(a.dstates == std::set<positions>({ positions({ 0, 2 }), positions({ 1, 3 }), positions({ 4 }),
+                                             positions({ 5, 6 }), positions({ 6 }) }));
+    CHECK(has_transition(a, positions({ 0, 2 }), ae[0], positions({ 1, 3 })));
+    CHECK(has_transition(a, positions({ 1, 3 }), ae[1], positions({ 6 })));
+    CHECK(has_transition(a, positions({ 1, 3 }), oe[1], positions({ 4 })));
+    CHECK(has_transition(a, positions({ 4 }), a_ring[0], positions({ 5, 6 })));
+    CHECK(has_transition(a, positions({ 5, 6 }), a_ring[1], positions({ 5, 6 })));
+}
+
 static void test_build_transition_table() {
     std::set<positions> dstates = { positions({ 1 }), positions({ 2 }), positions({ 3 }), positions({ 4 }) };
     Transitions         dtran;
@@ -439,7 +453,7 @@ static void test_build_transition_table() {
 static void test_regex_to_dfa_alternation_concat() {
     DFA dfa = regex_to_dfa("a|bc");
 
-    CHECK(dfa.alphabet == std::set<char32_t>({ '#', 'a', 'b', 'c' }));
+    CHECK(dfa.alphabet == std::set<char>({ '#', 'a', 'b', 'c' }));
     CHECK(dfa.base.size() == 4);
     CHECK(packed_transition(dfa, 1, 'a') == 3);
     CHECK(packed_transition(dfa, 1, 'b') == 2);
@@ -451,10 +465,19 @@ static void test_regex_to_dfa_alternation_concat() {
 static void test_regex_to_dfa_repetition() {
     DFA dfa = regex_to_dfa("a*");
 
-    CHECK(dfa.alphabet == std::set<char32_t>({ '#', 'a' }));
+    CHECK(dfa.alphabet == std::set<char>({ '#', 'a' }));
     CHECK(dfa.base.size() == 2);
     CHECK(packed_transition(dfa, 1, 'a') == 1);
     CHECK(packed_transition(dfa, 1, 'b') == 0);
+}
+
+static void test_regex_to_dfa_unicode_bytes() {
+    const std::string ae = "æ";
+    DFA dfa = regex_to_dfa(ae);
+
+    size_t after_first_byte = packed_transition(dfa, dfa.initstate, ae[0]);
+    CHECK(after_first_byte != 0);
+    CHECK(packed_transition(dfa, after_first_byte, ae[1]) != 0);
 }
 
 int main() {
@@ -500,9 +523,11 @@ int main() {
     run("concatenation", test_concatenation);
     run("repetition", test_repetition);
     run("concat_repetition", test_concat_repetition);
+    run("unicode_character", test_unicode_character);
     run("build_transition_table", test_build_transition_table);
     run("regex_to_dfa_alternation_concat", test_regex_to_dfa_alternation_concat);
     run("regex_to_dfa_repetition", test_regex_to_dfa_repetition);
+    run("regex_to_dfa_unicode_bytes", test_regex_to_dfa_unicode_bytes);
 
     return n_fail == 0 ? 0 : 1;
 }
