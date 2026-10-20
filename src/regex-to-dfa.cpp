@@ -147,7 +147,6 @@ void desugar(std::string & pattern) {
                 break;
 
             case '[':
-                throw std::logic_error("classes not yet supported");
                 i++;
                 if (pattern_cpy[i] == '^') {
                     throw std::logic_error("negated classes not yet supported");
@@ -155,12 +154,18 @@ void desugar(std::string & pattern) {
                 if (pattern_cpy[i] == ':') {
                     throw std::logic_error("POSIX-based character classes not yet supported");
                 }
+
+                pattern += '(';
                 while (pattern_cpy[i] != ']') {
                     if (pattern_cpy[i] == '-') {
                         throw std::logic_error("ranges '[a-z]' not yet supported");
                     }
+                    pattern += pattern_cpy[i];
+                    pattern += '|';
                     i++;
                 }
+                pattern.pop_back(); //remove trailing '|'
+                pattern += ')';
                 break;
 
             case '^':
@@ -207,40 +212,29 @@ void desugar(std::string & pattern) {
                         throw std::logic_error("word boundary '\\B' not yet supported");
                         break;
 
-                    case 'f':
-                        throw std::logic_error("form feed '\\f' not yet supported");
+                    case 'f': //form feed
+                    case 'n': //newline
+                    case 'r': //carriage return
+                    case 't': //horizontal tab
+                    case 'v': //vertical tab
+                    case '0': //NUL
+                        pattern += '\\';
+                        pattern += pattern_cpy[i];
                         break;
 
-                    case 'n':
-                        throw std::logic_error("new line '\\n' not yet supported");
+                    case 'c': //character (\cX)
+                        i++;
+                        pattern += pattern_cpy[i];
                         break;
 
-                    case 'r':
-                        throw std::logic_error("carriage return '\\r' not yet supported");
+                    case 'x': //character (\xHH)
+                        pattern += static_cast<char>(std::stoul(pattern_cpy.substr(i+1, 2), nullptr, 16));
+                        i += 2;
                         break;
 
-                    case 't':
-                        throw std::logic_error("horizontal tab '\\t' not yet supported");
-                        break;
-
-                    case 'v':
-                        throw std::logic_error("vertical tab '\\v' not yet supported");
-                        break;
-
-                    case '0':
-                        throw std::logic_error("NUL '\\0' not yet supported");
-                        break;
-
-                    case 'c':
-                        throw std::logic_error("control character '\\c' not yet supported");
-                        break;
-
-                    case 'x':
-                        throw std::logic_error("control characters '\\x' not yet supported");
-                        break;
-
-                    case 'u':
-                        throw std::logic_error("control characters '\\u' not yet supported");
+                    case 'u': //character (\uHHHH)
+                        pattern += static_cast<char32_t>(std::stoul(pattern_cpy.substr(i+1, 4), nullptr, 16));
+                        i += 4;
                         break;
 
                     case '1':
@@ -255,9 +249,8 @@ void desugar(std::string & pattern) {
                         throw std::logic_error("backreferences not yet supported");
                         break;
 
-                    default:
-                        throw std::logic_error(std::string("unknown escape: ") + "\\" + pattern_cpy[i]);
-                        break;
+                    default: //IdentityEscape
+                        pattern += c;
                 }
                 break;
 

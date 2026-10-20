@@ -218,6 +218,10 @@ static void test_desugar_star_group() {
     check_desugar("(a|b)*", "(a|b)*");
 }
 
+static void test_desugar_character_class() {
+    check_desugar("[abc]abc", "(a|b|c)abc");
+}
+
 static void test_desugar_unsupported_lookahead() {
     check_desugar_throws("(?=a)", "lookahead not yet supported");
 }
@@ -493,6 +497,7 @@ int main() {
     run("desugar_plain_symbol", test_desugar_plain_symbol);
     run("desugar_plain_pattern", test_desugar_plain_pattern);
     run("desugar_star_group", test_desugar_star_group);
+    run("desugar_character_class", test_desugar_character_class);
     run("desugar_unsupported_lookahead", test_desugar_unsupported_lookahead);
     run("desugar_unsupported_classes", test_desugar_unsupported_classes);
     run("desugar_unsupported_anchors", test_desugar_unsupported_anchors);
