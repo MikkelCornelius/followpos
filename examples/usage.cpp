@@ -17,7 +17,7 @@ std::vector<std::string> read_tokens(const std::string& path) {
 }
 
 int main() {
-    std::vector<std::string> content = read_tokens("examples/tokens_word_pat.txt");
+    std::vector<std::string> content = read_tokens("examples/tokens.txt");
     std::string pat = "<tool_call>";
 
     regex_dfa::DFA    dfa = regex_dfa::regex_to_dfa(pat);
