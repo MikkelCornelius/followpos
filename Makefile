@@ -7,3 +7,8 @@ usage:
 	cmake -B build
 	cmake --build build --target usage
 	./build/usage
+
+benchmark:
+	cmake -B build
+	cmake --build build --target benchmark
+	./build/benchmark

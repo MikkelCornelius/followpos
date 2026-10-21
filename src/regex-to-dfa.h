@@ -80,5 +80,5 @@ void build_transition_table(std::set<std::set<size_t>>         dstates,
 
 DFA regex_to_dfa(std::string pattern);
 
-bool feed(std::string & tok, DFA & dfa, std::list<size_t> & live_dfas);
+bool feed(const std::string & tok, DFA & dfa, std::list<size_t> & live_dfas);
 }  // namespace regex_dfa

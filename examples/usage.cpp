@@ -23,7 +23,7 @@ int main() {
     regex_dfa::DFA    dfa = regex_dfa::regex_to_dfa(pat);
     std::list<size_t> live_dfas;
 
-    for (std::string tok : content) {
+    for (const std::string & tok : content) {
         if (regex_dfa::feed(tok, dfa, live_dfas)) {
             std::cout << "match found at token: " << tok << std::endl;
             break;

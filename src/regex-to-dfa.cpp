@@ -680,7 +680,7 @@ static bool advance_dfas(DFA & dfa, std::list<size_t> & live_dfas, char32_t char
     return false;
 }
 
-bool feed(std::string & tok, DFA & dfa, std::list<size_t> & live_dfas) {
+bool feed(const std::string & tok, DFA & dfa, std::list<size_t> & live_dfas) {
     for (char32_t character : tok) {
         if (advance_dfas(dfa, live_dfas, character)) {
             return true;
