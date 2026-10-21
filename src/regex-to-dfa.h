@@ -1,22 +1,19 @@
 #pragma once
 
 #include <algorithm>  //for a sorting algorithm. A non-sorted vector would also be okay
+#include <list>
 #include <map>
 #include <queue>
 #include <set>
 #include <string>
 #include <vector>
 
-enum regex_node_type {
-    REGEX_NODE_EPSILON       = 0,
-    REGEX_NODE_SYMBOL        = 1,
-    REGEX_NODE_CONCATENATION = 2,
-    REGEX_NODE_ALTERNATION   = 3,
-    REGEX_NODE_REPETITION    = 4
-};
+namespace regex_dfa {
+
+enum node_type { EPSILON = 0, SYMBOL = 1, CONCATENATION = 2, ALTERNATION = 3, REPETITION = 4 };
 
 struct Node {
-    regex_node_type  type        = REGEX_NODE_EPSILON;
+    node_type        type        = EPSILON;
     char             value       = '\0';
     int              position    = -1;
     Node *           left_child  = nullptr;
@@ -38,7 +35,7 @@ struct Parser {
     size_t              i = 0;
 
     char   peek() const;
-    Node * make(regex_node_type type, Node * left, Node * right = nullptr);
+    Node * make(node_type type, Node * left, Node * right = nullptr);
 
     Node * parse_or();
     Node * parse_cat();
@@ -82,3 +79,6 @@ void build_transition_table(std::set<std::set<size_t>>         dstates,
                             const std::set<std::set<size_t>> & accepting_state_positions);
 
 DFA regex_to_dfa(std::string pattern);
+
+bool feed(std::string & tok, DFA & dfa, std::list<size_t> & live_dfas);
+}  // namespace regex_dfa

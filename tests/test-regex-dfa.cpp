@@ -1,7 +1,9 @@
-#include "common.h"
+#include "regex-to-dfa.h"
 
 #include <cstdio>
 #include <stdexcept>
+
+using namespace regex_dfa;
 
 static int n_fail = 0;
 
@@ -21,15 +23,15 @@ using positions = std::set<size_t>;
 
 static std::string to_string(const Node & n) {
     switch (n.type) {
-        case REGEX_NODE_EPSILON:
+        case EPSILON:
             return "e";
-        case REGEX_NODE_SYMBOL:
+        case SYMBOL:
             return std::string(1, (char) n.value);
-        case REGEX_NODE_CONCATENATION:
+        case CONCATENATION:
             return "(" + to_string(*n.left_child) + "." + to_string(*n.right_child) + ")";
-        case REGEX_NODE_ALTERNATION:
+        case ALTERNATION:
             return "(" + to_string(*n.left_child) + "|" + to_string(*n.right_child) + ")";
-        case REGEX_NODE_REPETITION:
+        case REPETITION:
             return "(" + to_string(*n.left_child) + "*)";
     }
     return "";
@@ -38,7 +40,7 @@ static std::string to_string(const Node & n) {
 // Hand-built syntax tree nodes (all pointers initialized, so trees are safe to free)
 static Node * leaf(int position, char c) {
     auto n         = new Node;
-    n->type        = REGEX_NODE_SYMBOL;
+    n->type        = SYMBOL;
     n->value       = c;
     n->position    = position;
     n->left_child  = nullptr;
@@ -46,7 +48,7 @@ static Node * leaf(int position, char c) {
     return n;
 }
 
-static Node * make(regex_node_type type, Node * left = nullptr, Node * right = nullptr) {
+static Node * make(node_type type, Node * left = nullptr, Node * right = nullptr) {
     auto n         = new Node;
     n->type        = type;
     n->left_child  = left;
@@ -55,19 +57,19 @@ static Node * make(regex_node_type type, Node * left = nullptr, Node * right = n
 }
 
 static Node * eps() {
-    return make(REGEX_NODE_EPSILON);
+    return make(EPSILON);
 }
 
 static Node * cat(Node * l, Node * r) {
-    return make(REGEX_NODE_CONCATENATION, l, r);
+    return make(CONCATENATION, l, r);
 }
 
 static Node * alt(Node * l, Node * r) {
-    return make(REGEX_NODE_ALTERNATION, l, r);
+    return make(ALTERNATION, l, r);
 }
 
 static Node * star(Node * c) {
-    return make(REGEX_NODE_REPETITION, c);
+    return make(REPETITION, c);
 }
 
 // Parse a pattern and compare the augmented tree and symbol table
@@ -476,8 +478,8 @@ static void test_regex_to_dfa_repetition() {
 }
 
 static void test_regex_to_dfa_unicode_bytes() {
-    const std::string ae = "æ";
-    DFA dfa = regex_to_dfa(ae);
+    const std::string ae  = "æ";
+    DFA               dfa = regex_to_dfa(ae);
 
     size_t after_first_byte = packed_transition(dfa, dfa.initstate, ae[0]);
     CHECK(after_first_byte != 0);

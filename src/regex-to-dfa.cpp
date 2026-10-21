@@ -1,32 +1,8 @@
-#include "common.h"
+#include "regex-to-dfa.h"
 
 #include <stdexcept>
 
-// Clean up memory from syntax tree
-void free_tree(Node * node) {
-    if (node == nullptr) {
-        return;
-    }
-    free_tree(node->left_child);
-    free_tree(node->right_child);
-    delete node;
-}
-
-// The augmented pattern "(r)#"
-Node * augment_pattern(Node * old_root, std::vector<char> & symbol_at) {
-    Node * special    = new Node;
-    special->type     = REGEX_NODE_SYMBOL;
-    special->value    = '#';
-    special->position = symbol_at.size();
-
-    Node * root       = new Node;
-    root->type        = REGEX_NODE_CONCATENATION;
-    root->left_child  = old_root;
-    root->right_child = std::move(special);
-
-    symbol_at.push_back('#');
-    return root;
-}
+namespace regex_dfa {
 
 static size_t find_group(std::string & pattern, size_t sub_pattern_start_index) {
     size_t count = 1;  // Start at 1 for the opening parenthesis we're matching
@@ -44,13 +20,20 @@ static size_t find_group(std::string & pattern, size_t sub_pattern_start_index) 
     throw std::logic_error("unclosed parenthese");
 }
 
-static int utf8_length(unsigned char c)
-{
-    if (c < 0x80) return 1;            // 0xxxxxxx
-    if ((c >> 5) == 0b110) return 2;   // 110xxxxx
-    if ((c >> 4) == 0b1110) return 3;  // 1110xxxx
-    if ((c >> 3) == 0b11110) return 4; // 11110xxx
-    return 1;                          // invalid or continuation byte
+static size_t utf8_length(unsigned char c) {
+    if (c < 0x80) {
+        return 1;  // 0xxxxxxx
+    }
+    if ((c >> 5) == 0b110) {
+        return 2;  // 110xxxxx
+    }
+    if ((c >> 4) == 0b1110) {
+        return 3;  // 1110xxxx
+    }
+    if ((c >> 3) == 0b11110) {
+        return 4;  // 11110xxx
+    }
+    return 1;      // continuation byte
 }
 
 void desugar(std::string & pattern) {
@@ -61,13 +44,12 @@ void desugar(std::string & pattern) {
     std::string group = "";
     size_t      end;
     for (size_t i = 0; i < pattern_cpy.length(); i++) {
-
         // Concatenate bytes if multiple bytes are required to represent current character
-        int char_size = utf8_length(pattern_cpy[i]);
+        size_t char_size = utf8_length(pattern_cpy[i]);
         if (char_size > 1) {
             group.clear();
             pattern += '(';
-            for (int j = 0; j < char_size; j++) {
+            for (size_t j = 0; j < char_size; j++) {
                 pattern += pattern_cpy[i];
                 group += pattern_cpy[i];
                 i++;
@@ -189,11 +171,13 @@ void desugar(std::string & pattern) {
 
                     // "[æøå]" becomes "(\xc3\xa6|\xc3\xb8|\xc3\xa5)"
                     char_size = utf8_length(pattern_cpy[i]);
-                    for (int j = 0; j < char_size; j++) pattern += pattern_cpy[i];
+                    for (size_t j = 0; j < char_size; j++) {
+                        pattern += pattern_cpy[i];
+                    }
                     pattern += '|';
                     i++;
                 }
-                pattern.pop_back(); //remove trailing '|'
+                pattern.pop_back();  //remove trailing '|'
                 pattern += ')';
                 break;
 
@@ -241,43 +225,43 @@ void desugar(std::string & pattern) {
                         throw std::logic_error("word boundary '\\B' not yet supported");
                         break;
 
-                    case 'f': //form feed
+                    case 'f':  //form feed
                         pattern += '\f';
                         break;
 
-                    case 'n': //newline
+                    case 'n':  //newline
                         pattern += '\n';
                         break;
-                        
-                    case 'r': //carriage return
+
+                    case 'r':  //carriage return
                         pattern += '\r';
                         break;
 
-                    case 't': //horizontal tab
+                    case 't':  //horizontal tab
                         pattern += '\t';
                         break;
 
-                    case 'v': //vertical tab
+                    case 'v':  //vertical tab
                         pattern += '\v';
                         break;
 
-                    case '0': //NUL
+                    case '0':  //NUL
                         pattern += '\0';
                         break;
 
-                    case 'c': //character (\cX)
+                    case 'c':  //character (\cX)
                         i++;
                         pattern += pattern_cpy[i];
                         break;
 
-                    case 'x': //character (\xHH)
-                        pattern += static_cast<char>(std::stoul(pattern_cpy.substr(i+1, 2), nullptr, 16));
+                    case 'x':  //character (\xHH)
+                        pattern += static_cast<char>(std::stoul(pattern_cpy.substr(i + 1, 2), nullptr, 16));
                         i += 2;
                         break;
 
-                    case 'u': //character (\uHHHH)
-                        throw std::logic_error("control characters '\\u' not yet supported"); //implementation buggy
-                        pattern += static_cast<char32_t>(std::stoul(pattern_cpy.substr(i+1, 4), nullptr, 16));
+                    case 'u':                                                                  //character (\uHHHH)
+                        throw std::logic_error("control characters '\\u' not yet supported");  //implementation buggy
+                        pattern += static_cast<char32_t>(std::stoul(pattern_cpy.substr(i + 1, 4), nullptr, 16));
                         i += 4;
                         break;
 
@@ -293,7 +277,7 @@ void desugar(std::string & pattern) {
                         throw std::logic_error("backreferences not yet supported");
                         break;
 
-                    default: //IdentityEscape
+                    default:  //IdentityEscape
                         pattern += c;
                 }
                 break;
@@ -306,13 +290,39 @@ void desugar(std::string & pattern) {
     return;
 }
 
+// Clean up memory from syntax tree
+void free_tree(Node * node) {
+    if (node == nullptr) {
+        return;
+    }
+    free_tree(node->left_child);
+    free_tree(node->right_child);
+    delete node;
+}
+
+// The augmented pattern "(r)#"
+Node * augment_pattern(Node * old_root, std::vector<char> & symbol_at) {
+    Node * special    = new Node;
+    special->type     = SYMBOL;
+    special->value    = '#';
+    special->position = symbol_at.size();
+
+    Node * root       = new Node;
+    root->type        = CONCATENATION;
+    root->left_child  = old_root;
+    root->right_child = std::move(special);
+
+    symbol_at.push_back('#');
+    return root;
+}
+
 Parser::Parser(const std::string & pattern, std::vector<char> & symbol_at) : s(pattern), symbol_at(symbol_at) {}
 
 char Parser::peek() const {
     return i < s.size() ? s[i] : '\0';
 }
 
-Node * Parser::make(regex_node_type type, Node * left, Node * right) {
+Node * Parser::make(node_type type, Node * left, Node * right) {
     Node * n       = new Node;
     n->type        = type;
     n->left_child  = left;
@@ -332,7 +342,7 @@ Node * Parser::parse_or() {
     Node * left = parse_cat();
     while (peek() == '|') {
         i++;
-        left = make(REGEX_NODE_ALTERNATION, left, parse_cat());
+        left = make(ALTERNATION, left, parse_cat());
     }
     return left;
 }
@@ -341,16 +351,16 @@ Node * Parser::parse_cat() {
     Node * left = nullptr;
     while (peek() != '\0' && peek() != '|' && peek() != ')') {
         Node * right = parse_postfix();
-        left         = left ? make(REGEX_NODE_CONCATENATION, left, right) : right;
+        left         = left ? make(CONCATENATION, left, right) : right;
     }
-    return left ? left : make(REGEX_NODE_EPSILON, nullptr);
+    return left ? left : make(EPSILON, nullptr);
 }
 
 Node * Parser::parse_postfix() {
     Node * node = parse_atom();
     while (peek() == '*') {
         i++;
-        node = make(REGEX_NODE_REPETITION, node);
+        node = make(REPETITION, node);
     }
     return node;
 }
@@ -376,7 +386,7 @@ Node * Parser::parse_atom() {
         throw std::logic_error("feature not implemented");
     }
 
-    Node * node    = make(REGEX_NODE_SYMBOL, nullptr);
+    Node * node    = make(SYMBOL, nullptr);
     node->value    = c;
     node->position = symbol_at.size();  // next free position
     symbol_at.push_back(c);
@@ -385,13 +395,13 @@ Node * Parser::parse_atom() {
 
 void regex_annotate(Node & node, std::vector<std::set<size_t>> & followpos) {
     switch (node.type) {
-        case REGEX_NODE_EPSILON:
+        case EPSILON:
             {
                 // The empty string is of course empty
                 node.nullable = true;
                 break;
             }
-        case REGEX_NODE_SYMBOL:
+        case SYMBOL:
             {
                 // A symbol is of course not empty
                 node.nullable = false;
@@ -402,7 +412,7 @@ void regex_annotate(Node & node, std::vector<std::set<size_t>> & followpos) {
                 node.lastpos.insert(node.position);
                 break;
             }
-        case REGEX_NODE_CONCATENATION:
+        case CONCATENATION:
             {
                 // Start at leaf nodes
                 regex_annotate(*node.left_child, followpos);
@@ -430,7 +440,7 @@ void regex_annotate(Node & node, std::vector<std::set<size_t>> & followpos) {
                 }
                 break;
             }
-        case REGEX_NODE_ALTERNATION:
+        case ALTERNATION:
             {
                 // Start at leaf nodes
                 regex_annotate(*node.left_child, followpos);
@@ -448,7 +458,7 @@ void regex_annotate(Node & node, std::vector<std::set<size_t>> & followpos) {
                 node.lastpos.insert(node.right_child->lastpos.begin(), node.right_child->lastpos.end());
                 break;
             }
-        case REGEX_NODE_REPETITION:
+        case REPETITION:
             {
                 // Start at leaf nodes
                 regex_annotate(*node.left_child, followpos);
@@ -593,7 +603,7 @@ void build_transition_table(std::set<std::set<size_t>>         dstates,
 
         // Pack state
         for (const auto & tran : dtran[states[i]]) {
-            size_t symbol                    = static_cast<unsigned char>(tran.symbol);
+            size_t symbol                      = static_cast<unsigned char>(tran.symbol);
             dfa.check.at(offset + symbol)      = state_id;
             dfa.next_state.at(offset + symbol) = id_of[tran.to];
         }
@@ -629,3 +639,54 @@ DFA regex_to_dfa(std::string pattern) {
 
     return dfa;
 }
+
+//
+// Runtime
+//
+
+static bool advance_dfa(DFA & dfa, size_t & current_state, char32_t character) {
+    // TODO there might be a bug if `character` is outside the alphabet
+    if (current_state >= dfa.base.size()) {
+        return false;
+    }
+
+    size_t index = dfa.base[current_state] + character;
+    if (index >= dfa.check.size()) {
+        return 0;
+    }
+    if (dfa.check[index] == current_state) {
+        current_state = dfa.next_state[index];
+        return true;
+    }
+    return false;  //advance failed (dead state)
+}
+
+static bool advance_dfas(DFA & dfa, std::list<size_t> & live_dfas, char32_t character) {
+    live_dfas.push_back(dfa.initstate);
+    for (auto it = live_dfas.begin(); it != live_dfas.end();) {
+        size_t & current_state = *it;
+        if (!advance_dfa(dfa, current_state, character)) {  //if advance fails kill this DFA
+            it = live_dfas.erase(it);
+        } else {
+            ++it;
+        }
+    }
+
+    for (size_t state : live_dfas) {
+        if (dfa.accepting.find(state) != dfa.accepting.end()) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool feed(std::string & tok, DFA & dfa, std::list<size_t> & live_dfas) {
+    for (char32_t character : tok) {
+        if (advance_dfas(dfa, live_dfas, character)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+}  // namespace regex_dfa

@@ -13,3 +13,6 @@ enable_testing()
 add_executable(test-regex-dfa tests/test-regex-dfa.cpp)
 target_link_libraries(test-regex-dfa PRIVATE regex-dfa)
 add_test(NAME test-regex-dfa COMMAND test-regex-dfa)
+
+add_executable(usage examples/usage.cpp)
+target_link_libraries(usage PRIVATE regex-dfa)
