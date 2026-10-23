@@ -14,7 +14,7 @@ enum node_type { EPSILON = 0, SYMBOL = 1, CONCATENATION = 2, ALTERNATION = 3, RE
 
 struct Node {
     node_type        type        = EPSILON;
-    char             value       = '\0';
+    u_char             value       = '\0';
     int              position    = -1;
     Node *           left_child  = nullptr;
     Node *           right_child = nullptr;
@@ -26,15 +26,15 @@ struct Node {
 void free_tree(Node * node);
 
 struct Parser {
-    Parser(const std::string & pattern, std::vector<char> & symbol_at);
+    Parser(const std::string & pattern, std::vector<u_char> & symbol_at);
 
     Node * parse();
 
     const std::string & s;
-    std::vector<char> & symbol_at;
+    std::vector<u_char> & symbol_at;
     size_t              i = 0;
 
-    char   peek() const;
+    u_char   peek() const;
     Node * make(node_type type, Node * left, Node * right = nullptr);
 
     Node * parse_or();
@@ -45,11 +45,11 @@ struct Parser {
 
 struct Transition {
     std::set<size_t> to;
-    char             symbol;
+    u_char             symbol;
 };
 
 struct DFA {
-    std::set<char>      alphabet;
+    std::set<u_char>      alphabet;
     std::vector<size_t> next_state;
     std::vector<size_t> check;
     std::vector<size_t> base;
@@ -59,14 +59,14 @@ struct DFA {
 
 using Transitions = std::map<std::set<size_t>, std::vector<Transition>>;
 
-Node * augment_pattern(Node * old_root, std::vector<char> & symbol_at);
+Node * augment_pattern(Node * old_root, std::vector<u_char> & symbol_at);
 
 void desugar(std::string & pattern);
 
 void regex_annotate(Node & node, std::vector<std::set<size_t>> & followpos);
 
 void followpos(std::string                  pattern,
-               std::set<char> &             alphabet,
+               std::set<u_char> &             alphabet,
                std::set<size_t> &           initial_state_positions,
                std::set<std::set<size_t>> & accepting_state_positions,
                std::set<std::set<size_t>> & dstates,

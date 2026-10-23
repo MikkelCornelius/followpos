@@ -38,7 +38,7 @@ static std::string to_string(const Node & n) {
 }
 
 // Hand-built syntax tree nodes (all pointers initialized, so trees are safe to free)
-static Node * leaf(int position, char c) {
+static Node * leaf(int position, u_char c) {
     auto n         = new Node;
     n->type        = SYMBOL;
     n->value       = c;
@@ -75,8 +75,8 @@ static Node * star(Node * c) {
 // Parse a pattern and compare the augmented tree and symbol table
 static void check_parse(const std::string &       pattern,
                         const std::string &       expected_tree,
-                        const std::vector<char> & expected_symbols) {
-    std::vector<char> symbol_at;
+                        const std::vector<u_char> & expected_symbols) {
+    std::vector<u_char> symbol_at;
     Parser            p{ pattern, symbol_at };
     Node *            tree = p.parse();
     Node *            root = augment_pattern(tree, symbol_at);
@@ -108,7 +108,7 @@ static analyzed analyze(std::string pattern) {
     return a;
 }
 
-static bool has_transition(const analyzed & a, const positions & from, char symbol, const positions & to) {
+static bool has_transition(const analyzed & a, const positions & from, u_char symbol, const positions & to) {
     auto state = a.dtran.find(from);
     if (state == a.dtran.end()) {
         return false;
@@ -121,15 +121,27 @@ static bool has_transition(const analyzed & a, const positions & from, char symb
     return false;
 }
 
-static size_t packed_transition(const DFA & dfa, size_t state, char symbol) {
+static size_t packed_transition(const DFA & dfa, size_t state, u_char symbol) {
     if (state >= dfa.base.size()) {
         return 0;
     }
-    size_t index = dfa.base[state] + static_cast<unsigned char>(symbol);
+    size_t index = dfa.base[state] + static_cast<u_char>(symbol);
     if (index >= dfa.check.size() || dfa.check[index] != state) {
         return 0;
     }
     return dfa.next_state[index];
+}
+
+static bool matches_entire(const std::string & pattern, const std::string & input) {
+    DFA    dfa   = regex_to_dfa(pattern);
+    size_t state = dfa.initstate;
+    for (unsigned char byte : input) {
+        state = packed_transition(dfa, state, byte);
+        if (state == 0) {
+            return false;
+        }
+    }
+    return dfa.accepting.find(state) != dfa.accepting.end();
 }
 
 // Run one test; an exception (such as "not implemented") counts as a failure
@@ -222,6 +234,22 @@ static void test_desugar_star_group() {
 
 static void test_desugar_character_class() {
     check_desugar("[abc]abc", "(a|b|c)abc");
+}
+
+static void test_desugar_unicode() {
+    check_desugar("å*", "(å)*");
+}
+
+static void test_desugar_unicode_plus() {
+    check_desugar("å+", "(å)(å)*");
+}
+
+static void test_desugar_unicode_question() {
+    check_desugar("å?", "((å)|)");
+}
+
+static void test_desugar_unicode_class() {
+    check_desugar("[é漢]", "(\xc3\xa9|\xe6\xbc\xa2)");
 }
 
 static void test_desugar_unsupported_lookahead() {
@@ -459,7 +487,7 @@ static void test_build_transition_table() {
 static void test_regex_to_dfa_alternation_concat() {
     DFA dfa = regex_to_dfa("a|bc");
 
-    CHECK(dfa.alphabet == std::set<char>({ '#', 'a', 'b', 'c' }));
+    CHECK(dfa.alphabet == std::set<u_char>({ '#', 'a', 'b', 'c' }));
     CHECK(dfa.base.size() == 4);
     CHECK(packed_transition(dfa, 1, 'a') == 3);
     CHECK(packed_transition(dfa, 1, 'b') == 2);
@@ -471,7 +499,7 @@ static void test_regex_to_dfa_alternation_concat() {
 static void test_regex_to_dfa_repetition() {
     DFA dfa = regex_to_dfa("a*");
 
-    CHECK(dfa.alphabet == std::set<char>({ '#', 'a' }));
+    CHECK(dfa.alphabet == std::set<u_char>({ '#', 'a' }));
     CHECK(dfa.base.size() == 2);
     CHECK(packed_transition(dfa, 1, 'a') == 1);
     CHECK(packed_transition(dfa, 1, 'b') == 0);
@@ -484,6 +512,52 @@ static void test_regex_to_dfa_unicode_bytes() {
     size_t after_first_byte = packed_transition(dfa, dfa.initstate, ae[0]);
     CHECK(after_first_byte != 0);
     CHECK(packed_transition(dfa, after_first_byte, ae[1]) != 0);
+}
+
+static void test_unicode_codepoint_lengths() {
+    const std::string two_byte   = "é";
+    const std::string three_byte = "漢";
+    const std::string four_byte  = "🙂";
+
+    CHECK(two_byte.size() == 2);
+    CHECK(three_byte.size() == 3);
+    CHECK(four_byte.size() == 4);
+    CHECK(matches_entire(two_byte, two_byte));
+    CHECK(matches_entire(three_byte, three_byte));
+    CHECK(matches_entire(four_byte, four_byte));
+    CHECK(!matches_entire(two_byte, two_byte.substr(0, 1)));
+    CHECK(!matches_entire(three_byte, three_byte.substr(0, 2)));
+    CHECK(!matches_entire(four_byte, four_byte.substr(0, 3)));
+}
+
+static void test_unicode_concatenation_and_composition() {
+    const std::string composed   = "café";
+    const std::string decomposed = "cafe\xcc\x81";
+
+    CHECK(matches_entire(composed, composed));
+    CHECK(matches_entire(decomposed, decomposed));
+    CHECK(!matches_entire(composed, decomposed));
+}
+
+static void test_unicode_quantifier_and_alternation() {
+    const std::string acute = "é";
+    const std::string han   = "漢";
+
+    CHECK(matches_entire("é+", acute));
+    CHECK(matches_entire("é+", acute + acute + acute));
+    CHECK(!matches_entire("é+", ""));
+    CHECK(matches_entire("é|漢", acute));
+    CHECK(matches_entire("é|漢", han));
+    CHECK(!matches_entire("é|漢", acute + han));
+}
+
+static void test_unicode_character_class() {
+    const std::string acute = "é";
+    const std::string han   = "漢";
+
+    CHECK(matches_entire("[é漢]", acute));
+    CHECK(matches_entire("[é漢]", han));
+    CHECK(!matches_entire("[é漢]", "é漢"));
 }
 
 int main() {
@@ -500,6 +574,10 @@ int main() {
     run("desugar_plain_pattern", test_desugar_plain_pattern);
     run("desugar_star_group", test_desugar_star_group);
     run("desugar_character_class", test_desugar_character_class);
+    run("desugar_unicode", test_desugar_unicode);
+    run("desugar_unicode_plus", test_desugar_unicode_plus);
+    run("desugar_unicode_question", test_desugar_unicode_question);
+    run("desugar_unicode_class", test_desugar_unicode_class);
     //run("desugar_unsupported_lookahead", test_desugar_unsupported_lookahead);
     //run("desugar_unsupported_classes", test_desugar_unsupported_classes);
     //run("desugar_unsupported_anchors", test_desugar_unsupported_anchors);
@@ -535,6 +613,11 @@ int main() {
     run("regex_to_dfa_alternation_concat", test_regex_to_dfa_alternation_concat);
     run("regex_to_dfa_repetition", test_regex_to_dfa_repetition);
     run("regex_to_dfa_unicode_bytes", test_regex_to_dfa_unicode_bytes);
+
+    run("unicode_codepoint_lengths", test_unicode_codepoint_lengths);
+    run("unicode_concatenation_and_composition", test_unicode_concatenation_and_composition);
+    run("unicode_quantifier_and_alternation", test_unicode_quantifier_and_alternation);
+    run("unicode_character_class", test_unicode_character_class);
 
     return n_fail == 0 ? 0 : 1;
 }

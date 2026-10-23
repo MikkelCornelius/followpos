@@ -20,7 +20,7 @@ static size_t find_group(std::string & pattern, size_t sub_pattern_start_index) 
     throw std::logic_error("unclosed parenthese");
 }
 
-static size_t utf8_length(unsigned char c) {
+static size_t utf8_length(u_char c) {
     if (c < 0x80) {
         return 1;  // 0xxxxxxx
     }
@@ -40,7 +40,7 @@ void desugar(std::string & pattern) {
     std::string pattern_cpy = pattern;
     pattern.clear();  //make the pattern empty to later rebuild it
 
-    char32_t    c;
+    char    c;
     std::string group = "";
     size_t      end;
     for (size_t i = 0; i < pattern_cpy.length(); i++) {
@@ -73,7 +73,7 @@ void desugar(std::string & pattern) {
                 continue;                      //save group for next iteration
 
             case '+':
-                if (pattern_cpy[i - 1] == ')') {  //add parenthesis if group is not a single character
+                if (group.size() > 1) {  //add parenthesis if group is not a single character or single byte
                     pattern += "(" + group + ")*";
                 } else {
                     pattern += group + "*";
@@ -81,7 +81,7 @@ void desugar(std::string & pattern) {
                 break;
 
             case '?':
-                if (pattern_cpy[i - 1] == ')') {
+                if (group.size() > 1) {
                     // We need to insert a '()' before the group
                     pattern.erase(pattern.size() - group.size() - 2);
                     pattern += "((" + group + ")|)";
@@ -96,7 +96,7 @@ void desugar(std::string & pattern) {
 
             case '{':                                                    //quantifier
                 i++;
-                if (pattern_cpy[i - 2] == ')') {                         //if group
+                if (group.size() > 1) {                         //if group
                     for (size_t n = pattern_cpy[i] - '0'; n > 1; n--) {  //{n}
                         pattern += "(" + group + ")";
                     }
@@ -173,9 +173,9 @@ void desugar(std::string & pattern) {
                     char_size = utf8_length(pattern_cpy[i]);
                     for (size_t j = 0; j < char_size; j++) {
                         pattern += pattern_cpy[i];
+                        i++;
                     }
                     pattern += '|';
-                    i++;
                 }
                 pattern.pop_back();  //remove trailing '|'
                 pattern += ')';
@@ -301,7 +301,7 @@ void free_tree(Node * node) {
 }
 
 // The augmented pattern "(r)#"
-Node * augment_pattern(Node * old_root, std::vector<char> & symbol_at) {
+Node * augment_pattern(Node * old_root, std::vector<u_char> & symbol_at) {
     Node * special    = new Node;
     special->type     = SYMBOL;
     special->value    = '#';
@@ -316,9 +316,9 @@ Node * augment_pattern(Node * old_root, std::vector<char> & symbol_at) {
     return root;
 }
 
-Parser::Parser(const std::string & pattern, std::vector<char> & symbol_at) : s(pattern), symbol_at(symbol_at) {}
+Parser::Parser(const std::string & pattern, std::vector<u_char> & symbol_at) : s(pattern), symbol_at(symbol_at) {}
 
-char Parser::peek() const {
+u_char Parser::peek() const {
     return i < s.size() ? s[i] : '\0';
 }
 
@@ -370,7 +370,7 @@ Node * Parser::parse_atom() {
         throw std::logic_error("unexpected end of pattern");
     }
 
-    char c = s[i++];
+    u_char c = s[i++];
     if (c == '(') {
         Node * node = parse_or();
         if (peek() != ')') {
@@ -481,13 +481,13 @@ void regex_annotate(Node & node, std::vector<std::set<size_t>> & followpos) {
 }
 
 void followpos(std::string                  pattern,
-               std::set<char> &             alphabet,
+               std::set<u_char> &             alphabet,
                std::set<size_t> &           initial_state_position,
                std::set<std::set<size_t>> & accepting_state_positions,
                std::set<std::set<size_t>> & dstates,
                Transitions &                dtran) {
     // Parse the pattern, and return a syntax tree of the augmented pattern (r)# aswell as a lookup table `symbol_at`
-    std::vector<char> symbol_at;
+    std::vector<u_char> symbol_at;
     symbol_at.reserve(pattern.size());
     Parser p{ pattern, symbol_at };
     Node * tree = p.parse();
@@ -521,7 +521,7 @@ void followpos(std::string                  pattern,
             accepting_state_positions.insert(state);
         }
 
-        for (char symbol : alphabet) {
+        for (u_char symbol : alphabet) {
             std::set<size_t> next_state;
 
             // Create a new state containing the positions that can be reached from the current state with the current symbol
@@ -585,7 +585,7 @@ void build_transition_table(std::set<std::set<size_t>>         dstates,
         do {
             index_collision = false;
             for (const auto & tran : dtran[states[i]]) {
-                size_t symbol = static_cast<unsigned char>(tran.symbol);
+                size_t symbol = static_cast<u_char>(tran.symbol);
 
                 while (offset + symbol >= array_size) {
                     array_size *= 2;  //if out-of-index, double the size
@@ -603,7 +603,7 @@ void build_transition_table(std::set<std::set<size_t>>         dstates,
 
         // Pack state
         for (const auto & tran : dtran[states[i]]) {
-            size_t symbol                      = static_cast<unsigned char>(tran.symbol);
+            size_t symbol                      = static_cast<u_char>(tran.symbol);
             dfa.check.at(offset + symbol)      = state_id;
             dfa.next_state.at(offset + symbol) = id_of[tran.to];
         }
@@ -644,7 +644,7 @@ DFA regex_to_dfa(std::string pattern) {
 // Runtime
 //
 
-static bool advance_dfa(DFA & dfa, size_t & current_state, char32_t character) {
+static bool advance_dfa(DFA & dfa, size_t & current_state, u_char character) {
     // TODO there might be a bug if `character` is outside the alphabet
     if (current_state >= dfa.base.size()) {
         return false;
@@ -661,7 +661,7 @@ static bool advance_dfa(DFA & dfa, size_t & current_state, char32_t character) {
     return false;  //advance failed (dead state)
 }
 
-static bool advance_dfas(DFA & dfa, std::list<size_t> & live_dfas, char32_t character) {
+static bool advance_dfas(DFA & dfa, std::list<size_t> & live_dfas, u_char character) {
     live_dfas.push_back(dfa.initstate);
     for (auto it = live_dfas.begin(); it != live_dfas.end();) {
         size_t & current_state = *it;
@@ -681,7 +681,7 @@ static bool advance_dfas(DFA & dfa, std::list<size_t> & live_dfas, char32_t char
 }
 
 bool feed(const std::string & tok, DFA & dfa, std::list<size_t> & live_dfas) {
-    for (char32_t character : tok) {
+    for (u_char character : tok) {
         if (advance_dfas(dfa, live_dfas, character)) {
             return true;
         }

@@ -17,13 +17,16 @@ add_test(NAME test-regex-dfa COMMAND test-regex-dfa)
 add_executable(usage examples/usage.cpp)
 target_link_libraries(usage PRIVATE regex-dfa)
 
-find_library(HS_LIB hs PATHS /usr/local/lib64 /usr/local/lib REQUIRED)
-find_path(HS_INCLUDE hs/hs.h PATHS /usr/local/include REQUIRED)
+option(BUILD_BENCHMARK "Build benchmark (requires VectorScan)" OFF)
+if(BUILD_BENCHMARK)
+    find_library(HS_LIB hs PATHS /usr/local/lib64 /usr/local/lib REQUIRED)
+    find_path(HS_INCLUDE hs/hs.h PATHS /usr/local/include REQUIRED)
 
-add_executable(benchmark
-    tests/bench/bench-main.cpp
-    tests/bench/bench-followpos.cpp
-    tests/bench/bench-llama.cpp
-    tests/bench/bench-vectorscan.cpp)
-target_include_directories(benchmark PRIVATE ${HS_INCLUDE})
-target_link_libraries(benchmark PRIVATE regex-dfa ${HS_LIB})
+    add_executable(benchmark
+        tests/bench/bench-main.cpp
+        tests/bench/bench-followpos.cpp
+        tests/bench/bench-llama.cpp
+        tests/bench/bench-vectorscan.cpp)
+    target_include_directories(benchmark PRIVATE ${HS_INCLUDE})
+    target_link_libraries(benchmark PRIVATE regex-dfa ${HS_LIB})
+endif()
