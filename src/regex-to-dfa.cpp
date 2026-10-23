@@ -37,6 +37,12 @@ static size_t utf8_length(u_char c) {
 }
 
 void desugar(std::string & pattern) {
+    if (pattern[0]=='+' ||
+        pattern[0]=='?' ||
+        pattern[0]=='{') {
+            throw std::logic_error("broken regex");
+        }
+
     std::string pattern_cpy = pattern;
     pattern.clear();  //make the pattern empty to later rebuild it
 
@@ -81,6 +87,14 @@ void desugar(std::string & pattern) {
                 break;
 
             case '?':
+                if (pattern_cpy[i - 1] == '*' ||
+                    pattern_cpy[i - 1] == '+' ||
+                    pattern_cpy[i - 1] == '?' ||
+                    pattern_cpy[i - 1] == '}') {
+                    throw std::logic_error("non-greedy quantifier not yet supported");
+                } else if (pattern_cpy[i - 1] == '(') {
+                    throw std::logic_error("lookahead not yet supported");
+                }
                 if (group.size() > 1) {
                     // We need to insert a '()' before the group
                     pattern.erase(pattern.size() - group.size() - 2);
@@ -102,17 +116,13 @@ void desugar(std::string & pattern) {
                     }
                     i++;
                     if (pattern_cpy[i] == '}') {  //{n}
-                        if (pattern_cpy[i + 1] == '?') {
-                            throw std::logic_error("non-greedy quantifier not yet supported");
-                        }
                         break;
+                    } else if (pattern_cpy[i] != ',') {
+                        throw std::logic_error("broken regex. Unexpected quantifier format");
                     }
                     i++;
                     if (pattern_cpy[i] == '}') {  //{n,}
                         pattern += "(" + group + ")*";
-                        if (pattern_cpy[i + 1] == '?') {
-                            throw std::logic_error("non-greedy quantifier not yet supported");
-                        }
                         break;
                     } else {  //{n,m}
                         for (int m = pattern_cpy[i] - '0'; m > pattern_cpy[i - 2] - '0'; m--) {
@@ -125,17 +135,13 @@ void desugar(std::string & pattern) {
                     }
                     i++;
                     if (pattern_cpy[i] == '}') {  //{n}
-                        if (pattern_cpy[i + 1] == '?') {
-                            throw std::logic_error("non-greedy quantifier not yet supported");
-                        }
                         break;
+                    } else if (pattern_cpy[i] != ',') {
+                        throw std::logic_error("broken regex. Unexpected quantifier format");
                     }
                     i++;
                     if (pattern_cpy[i] == '}') {  //{n,}
                         pattern += group + "*";
-                        if (pattern_cpy[i + 1] == '?') {
-                            throw std::logic_error("non-greedy quantifier not yet supported");
-                        }
                         break;
                     } else {  //{n,m}
                         for (int m = pattern_cpy[i] - '0'; m > pattern_cpy[i - 2] - '0'; m--) {
@@ -144,8 +150,8 @@ void desugar(std::string & pattern) {
                     }
                 }
                 i++;
-                if (pattern_cpy[i + 1] == '?') {
-                    throw std::logic_error("non-greedy quantifier not yet supported");
+                if (pattern_cpy[i] != '}') {
+                    throw std::logic_error("broken regex. Maybe whitespace inside quantifier");
                 }
                 break;
 
