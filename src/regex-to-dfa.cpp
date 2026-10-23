@@ -36,6 +36,147 @@ static size_t utf8_length(u_char c) {
     return 1;      // continuation byte
 }
 
+// Convert `std::string` to uint32_t
+static size_t decodeUtf8(const std::string& bytes) {
+    if (bytes.empty()) return 0;
+
+    unsigned char first = static_cast<unsigned char>(bytes[0]);
+    size_t codePoint;
+    size_t len;
+
+    if (first < 0x80) {            // 1 byte: 0xxxxxxx
+        codePoint = first;
+        len = 1;
+    } else if ((first >> 5) == 0x6) {  // 2 bytes: 110xxxxx
+        codePoint = first & 0x1F;
+        len = 2;
+    } else if ((first >> 4) == 0xE) {  // 3 bytes: 1110xxxx
+        codePoint = first & 0x0F;
+        len = 3;
+    } else if ((first >> 3) == 0x1E) { // 4 bytes: 11110xxx
+        codePoint = first & 0x07;
+        len = 4;
+    } else {
+        return 0;  // invalid leading byte
+    }
+
+    if (bytes.size() != len) return 0;  // wrong number of bytes
+
+    for (size_t k = 1; k < len; ++k) {
+        unsigned char cont = static_cast<unsigned char>(bytes[k]);
+        if ((cont >> 6) != 0x2) return 0;  // continuation must be 10xxxxxx
+        codePoint = (codePoint << 6) | (cont & 0x3F);
+    }
+
+    return codePoint;
+}
+
+// Encode one code point into UTF-8, returning the number of bytes.
+static int encode_utf8_range(size_t c, size_t out[4]) {
+    if (c < 0x80) {
+        out[0] = c;
+        return 1;
+    }
+    if (c < 0x800) {
+        out[0] = 0xC0 | (c >> 6);
+        out[1] = 0x80 | (c & 0x3F);
+        return 2;
+    }
+    if (c < 0x10000) {
+        out[0] = 0xE0 | (c >> 12);
+        out[1] = 0x80 | ((c >> 6) & 0x3F);
+        out[2] = 0x80 | (c & 0x3F);
+        return 3;
+    }
+    out[0] = 0xF0 | (c >> 18);
+    out[1] = 0x80 | ((c >> 12) & 0x3F);
+    out[2] = 0x80 | ((c >> 6) & 0x3F);
+    out[3] = 0x80 | (c & 0x3F);
+    return 4;
+}
+
+// Desugar the code point range [lo, hi] into byte-range sequences.
+// Each sequence is a concatenation; the full result is their alternation.
+static void desugar_utf8_range(size_t lo, size_t hi, std::vector<Utf8Seq>& out) {
+    if (hi > 0x10FFFF) hi = 0x10FFFF;
+    if (lo > hi) return;
+
+    // Step 1: cut out the surrogates D800-DFFF (no UTF-8 encoding).
+    if (lo <= 0xDFFF && hi >= 0xD800) {
+        if (lo < 0xD800) desugar_utf8_range(lo, 0xD7FF, out);
+        if (hi > 0xDFFF) desugar_utf8_range(0xE000, hi, out);
+        return;
+    }
+
+    // Step 2: split where the encoded length changes (1, 2, 3, 4 bytes).
+    for (size_t edge : {0x7Fu, 0x7FFu, 0xFFFFu}) {
+        if (lo <= edge && edge < hi) {
+            desugar_utf8_range(lo, edge, out);
+            desugar_utf8_range(edge + 1, hi, out);
+            return;
+        }
+    }
+
+    // From here on, every code point in the range has the same length.
+
+    // Step 3: ASCII is a single byte range.
+    if (hi < 0x80) {
+        out.push_back({ {(size_t)lo, (size_t)hi} });
+        return;
+    }
+
+    // Step 4: peel off ragged edges, one continuation byte level at a time.
+    // Level i looks at the lowest 6*i bits, which are the last i bytes.
+    for (int i = 1; i <= 3; i++) {
+        size_t mask = (1u << (6 * i)) - 1;
+
+        // Skip this level if lo and hi agree on everything above it.
+        if ((lo & ~mask) == (hi & ~mask)) continue;
+
+        // lo is not at the start of its block: split off the partial block.
+        if ((lo & mask) != 0) {
+            desugar_utf8_range(lo, lo | mask, out);
+            desugar_utf8_range((lo | mask) + 1, hi, out);
+            return;
+        }
+        // hi is not at the end of its block: split off the partial block.
+        if ((hi & mask) != mask) {
+            desugar_utf8_range(lo, (hi & ~mask) - 1, out);
+            desugar_utf8_range(hi & ~mask, hi, out);
+            return;
+        }
+    }
+
+    // Step 5: clean case. Pair up the bytes of lo and hi.
+    size_t a[4], b[4];
+    int n = encode_utf8_range(lo, a);
+    encode_utf8_range(hi, b);
+
+    Utf8Seq seq;
+    for (int i = 0; i < n; i++)
+        seq.push_back({a[i], b[i]});
+    out.push_back(seq);
+}
+
+static void append_class_range(std::vector<Utf8Seq> & utf8_class_range, std::string & pattern) {
+    for (Utf8Seq seq : utf8_class_range) { // alternate each utf-8 sequence
+        for (ByteRange class_range : seq) { // concatenate all bytes in utf-8 sequence
+            if (class_range.lo != class_range.hi && seq.size() > 1) pattern += '('; //group alternatives within a multibyte sequence
+
+            // Alternate all characters in range
+            // TODO: minterm alphabet compressing will prevent long strings of alternation
+            for (size_t character_in_range = class_range.lo; character_in_range <= class_range.hi; character_in_range++) {
+                pattern += character_in_range;
+                pattern += '|';
+            }
+            pattern.pop_back();  //remove trailing '|'
+            if (class_range.lo != class_range.hi && seq.size() > 1) pattern += ')';
+        }
+        pattern += '|';
+    }
+    pattern.pop_back();  //remove trailing '|'
+}
+
 void desugar(std::string & pattern) {
     if (pattern[0]=='+' ||
         pattern[0]=='?' ||
@@ -167,19 +308,33 @@ void desugar(std::string & pattern) {
                 if (pattern_cpy[i] == ':') {
                     throw std::logic_error("POSIX-based character classes not yet supported");
                 }
+                if (pattern_cpy[i] == '-') {
+                    throw std::logic_error("broken regex: Range class without a start");
+                }
 
                 // "[abc]" becomes "(a|b|c)"
                 pattern += '(';
                 while (pattern_cpy[i] != ']') {
-                    if (pattern_cpy[i] == '-') {
-                        throw std::logic_error("ranges '[a-z]' not yet supported");
-                    }
-
-                    // "[æøå]" becomes "(\xc3\xa6|\xc3\xb8|\xc3\xa5)"
                     char_size = utf8_length(pattern_cpy[i]);
-                    for (size_t j = 0; j < char_size; j++) {
-                        pattern += pattern_cpy[i];
-                        i++;
+
+                    // "[a-d]" becomes "(a|b|c|d)"
+                    // "[一-鿿]" will first desugar to "(\xe4[\xb8-\xbf][\x80-\xbf]|[\xe5-\xe9][\x80-\xbf][\x80-\xbf])"
+                    if (pattern_cpy[i + char_size] == '-') {
+                        size_t low = decodeUtf8(pattern_cpy.substr(i, char_size));
+                        i += char_size + 1;
+                        char_size = utf8_length(pattern_cpy[i]);
+                        size_t hi = decodeUtf8(pattern_cpy.substr(i, char_size));
+                        std::vector<Utf8Seq> class_range;
+                        desugar_utf8_range(low, hi, class_range);
+                        append_class_range(class_range, pattern);
+                        i += char_size;
+                    } else {
+
+                        // "[æøå]" becomes "(\xc3\xa6|\xc3\xb8|\xc3\xa5)"
+                        for (size_t j = 0; j < char_size; j++) {
+                            pattern += pattern_cpy[i];
+                            i++;
+                        }
                     }
                     pattern += '|';
                 }

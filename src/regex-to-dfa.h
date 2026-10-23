@@ -58,6 +58,8 @@ struct DFA {
 };
 
 using Transitions = std::map<std::set<size_t>, std::vector<Transition>>;
+struct ByteRange { size_t lo, hi; };
+using Utf8Seq = std::vector<ByteRange>;
 
 Node * augment_pattern(Node * old_root, std::vector<u_char> & symbol_at);
 

@@ -159,7 +159,16 @@ static void run(const char * name, void (*fn)()) {
 // ---------------------------------------------------------------------------
 // Desugaring tests
 // ---------------------------------------------------------------------------
-
+static std::string to_hex(const std::string& s) {
+    static const char digits[] = "0123456789abcdef";
+    std::string out;
+    for (unsigned char c : s) {
+        out += digits[c >> 4];
+        out += digits[c & 0xF];
+        out += ' ';
+    }
+    return out;
+}
 static void check_desugar(const std::string & input, const std::string & expected) {
     std::string pattern = input;
     desugar(pattern);
@@ -236,6 +245,10 @@ static void test_desugar_character_class() {
     check_desugar("[abc]abc", "(a|b|c)abc");
 }
 
+static void test_desugar_range_class() {
+    check_desugar("[a-d]abc", "(a|b|c|d)abc");
+}
+
 static void test_desugar_unicode() {
     check_desugar("å*", "(å)*");
 }
@@ -250,6 +263,10 @@ static void test_desugar_unicode_question() {
 
 static void test_desugar_unicode_class() {
     check_desugar("[é漢]", "(\xc3\xa9|\xe6\xbc\xa2)");
+}
+
+static void test_desugar_unicode_range_class() {
+    check_desugar("[一-丄]", "(\xe4\xb8(\x80|\x81|\x82|\x83|\x84))");
 }
 
 static void test_desugar_unsupported_lookahead() {
@@ -574,10 +591,12 @@ int main() {
     run("desugar_plain_pattern", test_desugar_plain_pattern);
     run("desugar_star_group", test_desugar_star_group);
     run("desugar_character_class", test_desugar_character_class);
+    run("desugar_range_class", test_desugar_range_class);
     run("desugar_unicode", test_desugar_unicode);
     run("desugar_unicode_plus", test_desugar_unicode_plus);
     run("desugar_unicode_question", test_desugar_unicode_question);
     run("desugar_unicode_class", test_desugar_unicode_class);
+    run("desugar_unicode_range_class", test_desugar_unicode_range_class);
     //run("desugar_unsupported_lookahead", test_desugar_unsupported_lookahead);
     //run("desugar_unsupported_classes", test_desugar_unsupported_classes);
     //run("desugar_unsupported_anchors", test_desugar_unsupported_anchors);
