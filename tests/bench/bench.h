@@ -4,7 +4,7 @@
 #include <chrono>
 
 struct BenchResult {
-    long   init_ns  = 0;
+    long   init_us  = 0;
     long   match_ns = 0;
     size_t tokens   = 0;
     bool   found    = false;

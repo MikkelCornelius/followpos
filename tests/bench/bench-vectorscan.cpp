@@ -22,7 +22,7 @@ BenchResult bench_vectorscan(const std::vector<std::string>& content, const std:
     hs_stream_t* stream = nullptr;
     hs_open_stream(db, 0, &stream);
     auto t1 = clock::now();
-    r.init_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(t1 - t0).count();
+    r.init_us = std::chrono::duration_cast<std::chrono::microseconds>(t1 - t0).count();
 
     auto t2 = clock::now();
     for (const std::string& tok : content) {
