@@ -213,20 +213,44 @@ static void test_desugar_exact_repetition() {
     check_desugar("a{3}", "aaa");
 }
 
+static void test_desugar_multi_digit_exact_repetition() {
+    check_desugar("a{10}", "aaaaaaaaaa");
+}
+
+static void test_desugar_multi_digit_exact_repetition_group() {
+    check_desugar("(a|b){10}", "(a|b)(a|b)(a|b)(a|b)(a|b)(a|b)(a|b)(a|b)(a|b)(a|b)");
+}
+
 static void test_desugar_open_ended_repetition() {
     check_desugar("a{2,}", "aaa*");
+}
+
+static void test_desugar_multi_digit_open_ended_repetition() {
+    check_desugar("a{10,}", "aaaaaaaaaaa*");
 }
 
 static void test_desugar_bounded_repetition() {
     check_desugar("a{2,4}", "aa(a|)(a|)");
 }
 
+static void test_desugar_multi_digit_bounded_repetition() {
+    check_desugar("a{10,12}", "aaaaaaaaaa(a|)(a|)");
+}
+
 static void test_desugar_bounded_repetition_group() {
     check_desugar("(a|b){2,4}", "(a|b)(a|b)((a|b)|)((a|b)|)");
 }
 
+static void test_desugar_multi_digit_bounded_repetition_group() {
+    check_desugar("(a|b){10,12}", "(a|b)(a|b)(a|b)(a|b)(a|b)(a|b)(a|b)(a|b)(a|b)(a|b)((a|b)|)((a|b)|)");
+}
+
 static void test_desugar_bounded_repetition_edge() {
     check_desugar("a{0,2}", "(a|)(a|)");
+}
+
+static void test_desugar_identity_escape() {
+    check_desugar("\\{", "{");
 }
 
 static void test_desugar_plain_symbol() {
@@ -247,6 +271,10 @@ static void test_desugar_character_class() {
 
 static void test_desugar_range_class() {
     check_desugar("[a-d]abc", "(a|b|c|d)abc");
+}
+
+static void test_desugar_character_class_repetition() {
+    check_desugar("[a-c]{4}", "(a|b|c)(a|b|c)(a|b|c)(a|b|c)");
 }
 
 static void test_desugar_unicode() {
@@ -305,6 +333,30 @@ static void test_parse_empty() {
 
 static void test_parse_symbol() {
     check_parse("a", "(a.#)", { 'a', '#' });
+}
+
+static void test_parse_escaped_open_paren() {
+    check_parse("\\(", "((.#)", { '(', '#' });
+}
+
+static void test_parse_escaped_close_paren() {
+    check_parse("\\)", "().#)", { ')', '#' });
+}
+
+static void test_parse_group_with_escaped_open_paren() {
+    check_parse("(\\()", "((.#)", { '(', '#' });
+}
+
+static void test_parse_group_with_escaped_close_paren() {
+    check_parse("(\\))", "().#)", { ')', '#' });
+}
+
+static void test_parse_escaped_star() {
+    check_parse("\\*", "(*.#)", { '*', '#' });
+}
+
+static void test_parse_escaped_alternation() {
+    check_parse("\\|", "(|.#)", { '|', '#' });
 }
 
 static void test_parse_concat() {
@@ -583,15 +635,22 @@ int main() {
     run("desugar_question", test_desugar_question);
     run("desugar_question_group", test_desugar_question_group);
     run("desugar_exact_repetition", test_desugar_exact_repetition);
+    run("desugar_multi_digit_exact_repetition", test_desugar_multi_digit_exact_repetition);
+    run("desugar_multi_digit_exact_repetition_group", test_desugar_multi_digit_exact_repetition_group);
     run("desugar_open_ended_repetition", test_desugar_open_ended_repetition);
+    run("desugar_multi_digit_open_ended_repetition", test_desugar_multi_digit_open_ended_repetition);
     run("desugar_bounded_repetition", test_desugar_bounded_repetition);
+    run("desugar_multi_digit_bounded_repetition", test_desugar_multi_digit_bounded_repetition);
     run("desugar_bounded_repetition_group", test_desugar_bounded_repetition_group);
+    run("desugar_multi_digit_bounded_repetition_group", test_desugar_multi_digit_bounded_repetition_group);
     //run("desugar_bounded_repetition_edge", test_desugar_bounded_repetition_edge); //will fix later
+    run("desugar_identity_escape", test_desugar_identity_escape);
     run("desugar_plain_symbol", test_desugar_plain_symbol);
     run("desugar_plain_pattern", test_desugar_plain_pattern);
     run("desugar_star_group", test_desugar_star_group);
     run("desugar_character_class", test_desugar_character_class);
     run("desugar_range_class", test_desugar_range_class);
+    run("desugar_character_class_repetition", test_desugar_character_class_repetition);
     run("desugar_unicode", test_desugar_unicode);
     run("desugar_unicode_plus", test_desugar_unicode_plus);
     run("desugar_unicode_question", test_desugar_unicode_question);
@@ -605,6 +664,12 @@ int main() {
 
     run("parse_empty", test_parse_empty);
     run("parse_symbol", test_parse_symbol);
+    run("parse_escaped_open_paren", test_parse_escaped_open_paren);
+    run("parse_escaped_close_paren", test_parse_escaped_close_paren);
+    run("parse_group_with_escaped_open_paren", test_parse_group_with_escaped_open_paren);
+    run("parse_group_with_escaped_close_paren", test_parse_group_with_escaped_close_paren);
+    run("parse_escaped_star", test_parse_escaped_star);
+    run("parse_escaped_alternation", test_parse_escaped_alternation);
     run("parse_concat", test_parse_concat);
     run("parse_repeat_sym", test_parse_repeat_sym);
     run("parse_alt", test_parse_alt);

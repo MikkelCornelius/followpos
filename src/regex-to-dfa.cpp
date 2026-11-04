@@ -1,7 +1,7 @@
 #include "regex-to-dfa.h"
 
 #include <stdexcept>
-
+#include <iostream>
 namespace regex_dfa {
 
 static size_t find_group(std::string & pattern, size_t sub_pattern_start_index) {
@@ -178,10 +178,12 @@ static void append_class_range(std::vector<Utf8Seq> & utf8_class_range, std::str
 }
 
 void desugar(std::string & pattern) {
-    if (pattern[0]=='+' ||
+    if (pattern[0]=='|' ||
+        pattern[0]=='*' ||
+        pattern[0]=='+' ||
         pattern[0]=='?' ||
         pattern[0]=='{') {
-            throw std::logic_error("broken regex");
+            throw std::logic_error("broken regex: starting with operator");
         }
 
     std::string pattern_cpy = pattern;
@@ -189,7 +191,9 @@ void desugar(std::string & pattern) {
 
     char    c;
     std::string group = "";
-    size_t      end;
+    size_t      end; //closing group
+    size_t      n, m; //quantifiers
+    size_t      class_start;
     for (size_t i = 0; i < pattern_cpy.length(); i++) {
         // Concatenate bytes if multiple bytes are required to represent current character
         size_t char_size = utf8_length(pattern_cpy[i]);
@@ -251,8 +255,21 @@ void desugar(std::string & pattern) {
 
             case '{':                                                    //quantifier
                 i++;
+                n = pattern_cpy[i];
+                if (n < '0' || n > '9') {
+                    throw std::logic_error("broken regex. Unexpected quantifier format");
+                } else {
+                    n -= '0';
+                    //While next character is digit
+                    while (i + 1 < pattern_cpy.length() && pattern_cpy[i+1] >= '0' && pattern_cpy[i+1] <= '9') {
+                        i++;
+                        n *= 10;
+                        n += pattern_cpy[i] - '0';
+                    }
+                }
+
                 if (group.size() > 1) {                         //if group
-                    for (size_t n = pattern_cpy[i] - '0'; n > 1; n--) {  //{n}
+                    for (size_t copies = n; copies > 1; copies--) {  //{n}
                         pattern += "(" + group + ")";
                     }
                     i++;
@@ -266,12 +283,24 @@ void desugar(std::string & pattern) {
                         pattern += "(" + group + ")*";
                         break;
                     } else {  //{n,m}
-                        for (int m = pattern_cpy[i] - '0'; m > pattern_cpy[i - 2] - '0'; m--) {
+                        m = pattern_cpy[i];
+                        if (m < '0' || m > '9') {
+                            throw std::logic_error("broken regex. Unexpected quantifier format");
+                        } else {
+                            m -= '0';
+                            //While next character is digit
+                            while (i + 1 < pattern_cpy.length() && pattern_cpy[i+1] >= '0' && pattern_cpy[i+1] <= '9') {
+                                i++;
+                                m *= 10;
+                                m += pattern_cpy[i] - '0';
+                            }
+                        }
+                        for (size_t copies = n; copies < m; copies++) {
                             pattern += "((" + group + ")|)";
                         }
                     }
                 } else {                                                 //if not a group
-                    for (size_t n = pattern_cpy[i] - '0'; n > 1; n--) {  //{n}
+                    for (size_t copies = n; copies > 1; copies--) {  //{n}
                         pattern += group;
                     }
                     i++;
@@ -285,14 +314,25 @@ void desugar(std::string & pattern) {
                         pattern += group + "*";
                         break;
                     } else {  //{n,m}
-                        for (int m = pattern_cpy[i] - '0'; m > pattern_cpy[i - 2] - '0'; m--) {
+                        m = pattern_cpy[i];
+                        if (m < '0' || m > '9') {
+                            throw std::logic_error("broken regex. Unexpected quantifier format");
+                        } else {
+                            m -= '0';
+                            while (i + 1 < pattern_cpy.length() && pattern_cpy[i+1] >= '0' && pattern_cpy[i+1] <= '9') {
+                                i++;
+                                m *= 10;
+                                m += pattern_cpy[i] - '0';
+                            }
+                        }
+                        for (size_t copies = n; copies < m; copies++) {
                             pattern += "(" + group + "|)";
                         }
                     }
                 }
                 i++;
                 if (pattern_cpy[i] != '}') {
-                    throw std::logic_error("broken regex. Maybe whitespace inside quantifier");
+                    throw std::logic_error("broken regex. Unexpected quantifier format");
                 }
                 break;
 
@@ -313,13 +353,14 @@ void desugar(std::string & pattern) {
                 }
 
                 // "[abc]" becomes "(a|b|c)"
+                class_start = pattern.size();
                 pattern += '(';
                 while (pattern_cpy[i] != ']') {
                     char_size = utf8_length(pattern_cpy[i]);
 
                     // "[a-d]" becomes "(a|b|c|d)"
                     // "[一-鿿]" will first desugar to "(\xe4[\xb8-\xbf][\x80-\xbf]|[\xe5-\xe9][\x80-\xbf][\x80-\xbf])"
-                    if (pattern_cpy[i + char_size] == '-') {
+                    if (pattern_cpy[i + char_size] == '-') { //if range class
                         size_t low = decodeUtf8(pattern_cpy.substr(i, char_size));
                         i += char_size + 1;
                         char_size = utf8_length(pattern_cpy[i]);
@@ -340,7 +381,8 @@ void desugar(std::string & pattern) {
                 }
                 pattern.pop_back();  //remove trailing '|'
                 pattern += ')';
-                break;
+                group = pattern.substr(class_start + 1, pattern.size() - class_start - 2);
+                continue;
 
             case '^':
                 throw std::logic_error("start of input '^' not yet supported");
@@ -351,7 +393,6 @@ void desugar(std::string & pattern) {
                 break;
 
             case '\\':
-                throw std::logic_error("escape '\\' not yet supported");
                 i++;
                 switch (pattern_cpy[i]) {
                     case 'd':
@@ -363,7 +404,7 @@ void desugar(std::string & pattern) {
                         break;
 
                     case 's':
-                        throw std::logic_error("whitespace class '\\s' not yet supported");
+                        pattern += "( |\t|\n|\v|\f|\r)"; //only supporting ASCII for now. Should support Unicode locale such as `en_US.UTF-8`
                         break;
 
                     case 'S':
@@ -438,8 +479,19 @@ void desugar(std::string & pattern) {
                         throw std::logic_error("backreferences not yet supported");
                         break;
 
+                    // Keep "\" for literal operator character
+                    case '(':
+                        pattern += "\\(";
+                        break;
+                    case '*':
+                        pattern += "\\*";
+                        break;
+                    case '|':
+                        pattern += "\\|";
+                        break;
+
                     default:  //IdentityEscape
-                        pattern += c;
+                        pattern += pattern_cpy[i];
                 }
                 break;
 
@@ -544,7 +596,10 @@ Node * Parser::parse_atom() {
         throw std::logic_error("nothing to repeat");
     }
     if (c == '\\') {
-        throw std::logic_error("feature not implemented");
+        if (i >= s.size()) {
+            throw std::logic_error("unexpected end of pattern");
+        }
+        c = s[i++];
     }
 
     Node * node    = make(SYMBOL, nullptr);
