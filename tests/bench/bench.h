@@ -1,6 +1,7 @@
 #pragma once
 
 #include "regex-to-dfa.h"
+
 #include <chrono>
 
 struct BenchResult {
@@ -10,6 +11,6 @@ struct BenchResult {
     bool   found    = false;
 };
 
-BenchResult bench_followpos(const std::vector<std::string>& content, const std::string& pat);
-BenchResult bench_llama(const std::vector<std::string>& content, const std::string& pat);
-BenchResult bench_vectorscan(const std::vector<std::string>& content, const std::string& pat);
+BenchResult bench_followpos(const std::vector<std::string> & content, const std::string & pat);
+BenchResult bench_llama(const std::vector<std::string> & content, const std::string & pat);
+BenchResult bench_vectorscan(const std::vector<std::string> & content, const std::string & pat);

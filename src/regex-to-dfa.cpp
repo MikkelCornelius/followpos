@@ -1,6 +1,7 @@
 #include "regex-to-dfa.h"
 
 #include <stdexcept>
+
 namespace regex_dfa {
 
 // -----------------------------------------------------------------------------
@@ -40,34 +41,40 @@ static size_t utf8_length(u_char c) {
 }
 
 // Convert `std::string` to uint32_t
-static size_t decodeUtf8(const std::string& bytes) {
-    if (bytes.empty()) return 0;
+static size_t decodeUtf8(const std::string & bytes) {
+    if (bytes.empty()) {
+        return 0;
+    }
 
     unsigned char first = static_cast<unsigned char>(bytes[0]);
-    size_t codePoint;
-    size_t len;
+    size_t        codePoint;
+    size_t        len;
 
-    if (first < 0x80) {            // 1 byte: 0xxxxxxx
+    if (first < 0x80) {  // 1 byte: 0xxxxxxx
         codePoint = first;
-        len = 1;
+        len       = 1;
     } else if ((first >> 5) == 0x6) {  // 2 bytes: 110xxxxx
         codePoint = first & 0x1F;
-        len = 2;
+        len       = 2;
     } else if ((first >> 4) == 0xE) {  // 3 bytes: 1110xxxx
         codePoint = first & 0x0F;
-        len = 3;
-    } else if ((first >> 3) == 0x1E) { // 4 bytes: 11110xxx
+        len       = 3;
+    } else if ((first >> 3) == 0x1E) {  // 4 bytes: 11110xxx
         codePoint = first & 0x07;
-        len = 4;
+        len       = 4;
     } else {
         return 0;  // invalid leading byte
     }
 
-    if (bytes.size() != len) return 0;  // wrong number of bytes
+    if (bytes.size() != len) {
+        return 0;  // wrong number of bytes
+    }
 
     for (size_t k = 1; k < len; ++k) {
         unsigned char cont = static_cast<unsigned char>(bytes[k]);
-        if ((cont >> 6) != 0x2) return 0;  // continuation must be 10xxxxxx
+        if ((cont >> 6) != 0x2) {
+            return 0;  // continuation must be 10xxxxxx
+        }
         codePoint = (codePoint << 6) | (cont & 0x3F);
     }
 
@@ -100,19 +107,27 @@ static int encode_utf8_range(size_t c, size_t out[4]) {
 
 // Desugar the code point range [lo, hi] into byte-range sequences.
 // Each sequence is a concatenation; the full result is their alternation.
-static void desugar_utf8_range(size_t lo, size_t hi, std::vector<Utf8Seq>& out) {
-    if (hi > 0x10FFFF) hi = 0x10FFFF;
-    if (lo > hi) return;
+static void desugar_utf8_range(size_t lo, size_t hi, std::vector<Utf8Seq> & out) {
+    if (hi > 0x10FFFF) {
+        hi = 0x10FFFF;
+    }
+    if (lo > hi) {
+        return;
+    }
 
     // Step 1: cut out the surrogates D800-DFFF (no UTF-8 encoding).
     if (lo <= 0xDFFF && hi >= 0xD800) {
-        if (lo < 0xD800) desugar_utf8_range(lo, 0xD7FF, out);
-        if (hi > 0xDFFF) desugar_utf8_range(0xE000, hi, out);
+        if (lo < 0xD800) {
+            desugar_utf8_range(lo, 0xD7FF, out);
+        }
+        if (hi > 0xDFFF) {
+            desugar_utf8_range(0xE000, hi, out);
+        }
         return;
     }
 
     // Step 2: split where the encoded length changes (1, 2, 3, 4 bytes).
-    for (size_t edge : {0x7Fu, 0x7FFu, 0xFFFFu}) {
+    for (size_t edge : { 0x7Fu, 0x7FFu, 0xFFFFu }) {
         if (lo <= edge && edge < hi) {
             desugar_utf8_range(lo, edge, out);
             desugar_utf8_range(edge + 1, hi, out);
@@ -124,7 +139,9 @@ static void desugar_utf8_range(size_t lo, size_t hi, std::vector<Utf8Seq>& out) 
 
     // Step 3: ASCII is a single byte range.
     if (hi < 0x80) {
-        out.push_back({ {(size_t)lo, (size_t)hi} });
+        out.push_back({
+            { (size_t) lo, (size_t) hi }
+        });
         return;
     }
 
@@ -134,7 +151,9 @@ static void desugar_utf8_range(size_t lo, size_t hi, std::vector<Utf8Seq>& out) 
         size_t mask = (1u << (6 * i)) - 1;
 
         // Skip this level if lo and hi agree on everything above it.
-        if ((lo & ~mask) == (hi & ~mask)) continue;
+        if ((lo & ~mask) == (hi & ~mask)) {
+            continue;
+        }
 
         // lo is not at the start of its block: split off the partial block.
         if ((lo & mask) != 0) {
@@ -152,28 +171,34 @@ static void desugar_utf8_range(size_t lo, size_t hi, std::vector<Utf8Seq>& out) 
 
     // Step 5: clean case. Pair up the bytes of lo and hi.
     size_t a[4], b[4];
-    int n = encode_utf8_range(lo, a);
+    int    n = encode_utf8_range(lo, a);
     encode_utf8_range(hi, b);
 
     Utf8Seq seq;
-    for (int i = 0; i < n; i++)
-        seq.push_back({a[i], b[i]});
+    for (int i = 0; i < n; i++) {
+        seq.push_back({ a[i], b[i] });
+    }
     out.push_back(seq);
 }
 
 static void append_class_range(std::vector<Utf8Seq> & utf8_class_range, std::string & pattern) {
-    for (Utf8Seq seq : utf8_class_range) { // alternate each utf-8 sequence
-        for (ByteRange class_range : seq) { // concatenate all bytes in utf-8 sequence
-            if (class_range.lo != class_range.hi && seq.size() > 1) pattern += '('; //group alternatives within a multibyte sequence
+    for (Utf8Seq seq : utf8_class_range) {   // alternate each utf-8 sequence
+        for (ByteRange class_range : seq) {  // concatenate all bytes in utf-8 sequence
+            if (class_range.lo != class_range.hi && seq.size() > 1) {
+                pattern += '(';              //group alternatives within a multibyte sequence
+            }
 
             // Alternate all characters in range
             // TODO: minterm alphabet compressing will prevent long strings of alternation
-            for (size_t character_in_range = class_range.lo; character_in_range <= class_range.hi; character_in_range++) {
+            for (size_t character_in_range = class_range.lo; character_in_range <= class_range.hi;
+                 character_in_range++) {
                 pattern += character_in_range;
                 pattern += '|';
             }
             pattern.pop_back();  //remove trailing '|'
-            if (class_range.lo != class_range.hi && seq.size() > 1) pattern += ')';
+            if (class_range.lo != class_range.hi && seq.size() > 1) {
+                pattern += ')';
+            }
         }
         pattern += '|';
     }
@@ -182,21 +207,17 @@ static void append_class_range(std::vector<Utf8Seq> & utf8_class_range, std::str
 
 // Expand shorthand syntax (remove suntactic sugar)
 void desugar(std::string & pattern) {
-    if (pattern[0]=='|' ||
-        pattern[0]=='*' ||
-        pattern[0]=='+' ||
-        pattern[0]=='?' ||
-        pattern[0]=='{') {
-            throw std::logic_error("broken regex: starting with operator");
-        }
+    if (pattern[0] == '|' || pattern[0] == '*' || pattern[0] == '+' || pattern[0] == '?' || pattern[0] == '{') {
+        throw std::logic_error("broken regex: starting with operator");
+    }
 
     std::string pattern_cpy = pattern;
     pattern.clear();  //make the pattern empty to later rebuild it
 
-    char    c;
+    char        c;
     std::string group = "";
-    size_t      end; //closing group
-    size_t      n, m; //quantifiers
+    size_t      end;   //closing group
+    size_t      n, m;  //quantifiers
     size_t      class_start;
     for (size_t i = 0; i < pattern_cpy.length(); i++) {
         // Concatenate bytes if multiple bytes are required to represent current character
@@ -236,9 +257,7 @@ void desugar(std::string & pattern) {
                 break;
 
             case '?':
-                if (pattern_cpy[i - 1] == '*' ||
-                    pattern_cpy[i - 1] == '+' ||
-                    pattern_cpy[i - 1] == '?' ||
+                if (pattern_cpy[i - 1] == '*' || pattern_cpy[i - 1] == '+' || pattern_cpy[i - 1] == '?' ||
                     pattern_cpy[i - 1] == '}') {
                     throw std::logic_error("non-greedy quantifier not yet supported");
                 } else if (pattern_cpy[i - 1] == '(') {
@@ -257,7 +276,7 @@ void desugar(std::string & pattern) {
                 }
                 break;
 
-            case '{':                                                    //quantifier
+            case '{':  //quantifier
                 i++;
                 n = pattern_cpy[i];
                 if (n < '0' || n > '9') {
@@ -265,14 +284,14 @@ void desugar(std::string & pattern) {
                 } else {
                     n -= '0';
                     //While next character is digit
-                    while (i + 1 < pattern_cpy.length() && pattern_cpy[i+1] >= '0' && pattern_cpy[i+1] <= '9') {
+                    while (i + 1 < pattern_cpy.length() && pattern_cpy[i + 1] >= '0' && pattern_cpy[i + 1] <= '9') {
                         i++;
                         n *= 10;
                         n += pattern_cpy[i] - '0';
                     }
                 }
 
-                if (group.size() > 1) {                         //if group
+                if (group.size() > 1) {                              //if group
                     for (size_t copies = n; copies > 1; copies--) {  //{n}
                         pattern += "(" + group + ")";
                     }
@@ -293,7 +312,8 @@ void desugar(std::string & pattern) {
                         } else {
                             m -= '0';
                             //While next character is digit
-                            while (i + 1 < pattern_cpy.length() && pattern_cpy[i+1] >= '0' && pattern_cpy[i+1] <= '9') {
+                            while (i + 1 < pattern_cpy.length() && pattern_cpy[i + 1] >= '0' &&
+                                   pattern_cpy[i + 1] <= '9') {
                                 i++;
                                 m *= 10;
                                 m += pattern_cpy[i] - '0';
@@ -303,7 +323,7 @@ void desugar(std::string & pattern) {
                             pattern += "((" + group + ")|)";
                         }
                     }
-                } else {                                                 //if not a group
+                } else {                                             //if not a group
                     for (size_t copies = n; copies > 1; copies--) {  //{n}
                         pattern += group;
                     }
@@ -323,7 +343,8 @@ void desugar(std::string & pattern) {
                             throw std::logic_error("broken regex. Unexpected quantifier format");
                         } else {
                             m -= '0';
-                            while (i + 1 < pattern_cpy.length() && pattern_cpy[i+1] >= '0' && pattern_cpy[i+1] <= '9') {
+                            while (i + 1 < pattern_cpy.length() && pattern_cpy[i + 1] >= '0' &&
+                                   pattern_cpy[i + 1] <= '9') {
                                 i++;
                                 m *= 10;
                                 m += pattern_cpy[i] - '0';
@@ -364,17 +385,16 @@ void desugar(std::string & pattern) {
 
                     // "[a-d]" becomes "(a|b|c|d)"
                     // "[一-鿿]" will first desugar to "(\xe4[\xb8-\xbf][\x80-\xbf]|[\xe5-\xe9][\x80-\xbf][\x80-\xbf])"
-                    if (pattern_cpy[i + char_size] == '-') { //if range class
+                    if (pattern_cpy[i + char_size] == '-') {  //if range class
                         size_t low = decodeUtf8(pattern_cpy.substr(i, char_size));
                         i += char_size + 1;
-                        char_size = utf8_length(pattern_cpy[i]);
-                        size_t hi = decodeUtf8(pattern_cpy.substr(i, char_size));
+                        char_size               = utf8_length(pattern_cpy[i]);
+                        size_t               hi = decodeUtf8(pattern_cpy.substr(i, char_size));
                         std::vector<Utf8Seq> class_range;
                         desugar_utf8_range(low, hi, class_range);
                         append_class_range(class_range, pattern);
                         i += char_size;
                     } else {
-
                         // "[æøå]" becomes "(\xc3\xa6|\xc3\xb8|\xc3\xa5)"
                         for (size_t j = 0; j < char_size; j++) {
                             pattern += pattern_cpy[i];
@@ -408,7 +428,8 @@ void desugar(std::string & pattern) {
                         break;
 
                     case 's':
-                        pattern += "( |\t|\n|\v|\f|\r)"; //only supporting ASCII for now. Should support Unicode locale such as `en_US.UTF-8`
+                        pattern +=
+                            "( |\t|\n|\v|\f|\r)";  //only supporting ASCII for now. Should support Unicode locale such as `en_US.UTF-8`
                         break;
 
                     case 'S':
@@ -711,7 +732,7 @@ void annotate(Node & node, std::vector<std::set<size_t>> & followpos) {
 
 // Run followpos method
 void followpos(std::string                  pattern,
-               std::set<u_char> &             alphabet,
+               std::set<u_char> &           alphabet,
                std::set<size_t> &           initial_state_position,
                std::set<std::set<size_t>> & accepting_state_positions,
                std::set<std::set<size_t>> & dstates,

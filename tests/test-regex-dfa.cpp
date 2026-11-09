@@ -73,13 +73,13 @@ static Node * star(Node * c) {
 }
 
 // Parse a pattern and compare the augmented tree and symbol table
-static void check_parse(const std::string &       pattern,
-                        const std::string &       expected_tree,
+static void check_parse(const std::string &         pattern,
+                        const std::string &         expected_tree,
                         const std::vector<u_char> & expected_symbols) {
     std::vector<u_char> symbol_at;
-    Parser            p{ pattern, symbol_at };
-    Node *            tree = p.parse();
-    Node *            root = augment_pattern(tree, symbol_at);
+    Parser              p{ pattern, symbol_at };
+    Node *              tree = p.parse();
+    Node *              root = augment_pattern(tree, symbol_at);
 
     std::string got = to_string(*root);
     if (got != expected_tree) {
@@ -159,9 +159,9 @@ static void run(const char * name, void (*fn)()) {
 // ---------------------------------------------------------------------------
 // Desugaring tests
 // ---------------------------------------------------------------------------
-static std::string to_hex(const std::string& s) {
+static std::string to_hex(const std::string & s) {
     static const char digits[] = "0123456789abcdef";
-    std::string out;
+    std::string       out;
     for (unsigned char c : s) {
         out += digits[c >> 4];
         out += digits[c & 0xF];
@@ -169,6 +169,7 @@ static std::string to_hex(const std::string& s) {
     }
     return out;
 }
+
 static void check_desugar(const std::string & input, const std::string & expected) {
     std::string pattern = input;
     desugar(pattern);
