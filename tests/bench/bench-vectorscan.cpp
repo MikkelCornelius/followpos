@@ -1,4 +1,4 @@
-#include <hs/hs.h>
+#include "hs.h"
 #include "bench.h"
 
 static int on_match(unsigned, unsigned long long, unsigned long long,
