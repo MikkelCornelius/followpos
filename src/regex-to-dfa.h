@@ -65,7 +65,7 @@ Node * augment_pattern(Node * old_root, std::vector<u_char> & symbol_at);
 
 void desugar(std::string & pattern);
 
-void regex_annotate(Node & node, std::vector<std::set<size_t>> & followpos);
+void annotate(Node & node, std::vector<std::set<size_t>> & followpos);
 
 void followpos(std::string                  pattern,
                std::set<u_char> &             alphabet,

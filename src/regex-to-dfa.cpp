@@ -1,8 +1,11 @@
 #include "regex-to-dfa.h"
 
 #include <stdexcept>
-#include <iostream>
 namespace regex_dfa {
+
+// -----------------------------------------------------------------------------
+// Regex desugaring
+// -----------------------------------------------------------------------------
 
 static size_t find_group(std::string & pattern, size_t sub_pattern_start_index) {
     size_t count = 1;  // Start at 1 for the opening parenthesis we're matching
@@ -177,6 +180,7 @@ static void append_class_range(std::vector<Utf8Seq> & utf8_class_range, std::str
     pattern.pop_back();  //remove trailing '|'
 }
 
+// Expand shorthand syntax (remove suntactic sugar)
 void desugar(std::string & pattern) {
     if (pattern[0]=='|' ||
         pattern[0]=='*' ||
@@ -503,6 +507,10 @@ void desugar(std::string & pattern) {
     return;
 }
 
+// -----------------------------------------------------------------------------
+// Parser / Syntax tree construction
+// -----------------------------------------------------------------------------
+
 // Clean up memory from syntax tree
 void free_tree(Node * node) {
     if (node == nullptr) {
@@ -609,7 +617,12 @@ Node * Parser::parse_atom() {
     return node;
 }
 
-void regex_annotate(Node & node, std::vector<std::set<size_t>> & followpos) {
+// -----------------------------------------------------------------------------
+// Followpos analysis
+// -----------------------------------------------------------------------------
+
+// Calculate nullable, firstpos, lastpos, followpos
+void annotate(Node & node, std::vector<std::set<size_t>> & followpos) {
     switch (node.type) {
         case EPSILON:
             {
@@ -631,8 +644,8 @@ void regex_annotate(Node & node, std::vector<std::set<size_t>> & followpos) {
         case CONCATENATION:
             {
                 // Start at leaf nodes
-                regex_annotate(*node.left_child, followpos);
-                regex_annotate(*node.right_child, followpos);
+                annotate(*node.left_child, followpos);
+                annotate(*node.right_child, followpos);
 
                 // A concatenated pattern can only be nullable if both the concatenated patterns can
                 node.nullable = node.left_child->nullable & node.right_child->nullable;
@@ -659,8 +672,8 @@ void regex_annotate(Node & node, std::vector<std::set<size_t>> & followpos) {
         case ALTERNATION:
             {
                 // Start at leaf nodes
-                regex_annotate(*node.left_child, followpos);
-                regex_annotate(*node.right_child, followpos);
+                annotate(*node.left_child, followpos);
+                annotate(*node.right_child, followpos);
 
                 // An alternated pattern can only be nullable if one of the patterns can
                 node.nullable = node.left_child->nullable | node.right_child->nullable;
@@ -677,7 +690,7 @@ void regex_annotate(Node & node, std::vector<std::set<size_t>> & followpos) {
         case REPETITION:
             {
                 // Start at leaf nodes
-                regex_annotate(*node.left_child, followpos);
+                annotate(*node.left_child, followpos);
 
                 // A pattern can be repeated zero times
                 node.nullable = true;
@@ -696,6 +709,7 @@ void regex_annotate(Node & node, std::vector<std::set<size_t>> & followpos) {
     }
 }
 
+// Run followpos method
 void followpos(std::string                  pattern,
                std::set<u_char> &             alphabet,
                std::set<size_t> &           initial_state_position,
@@ -714,7 +728,7 @@ void followpos(std::string                  pattern,
 
     // Calculate the functions `nullable`, `firstpos`, `lastpos` and `followpos`
     std::vector<std::set<size_t>> followpos(symbol_at.size());
-    regex_annotate(*root, followpos);
+    annotate(*root, followpos);
 
     // Save initial state
     initial_state_position = root->firstpos;
@@ -762,6 +776,7 @@ void followpos(std::string                  pattern,
     }
 }
 
+// Compress transition table into packed arrays: base / check / next_state
 void build_transition_table(std::set<std::set<size_t>>         dstates,
                             Transitions                        dtran,
                             DFA &                              dfa,
@@ -834,31 +849,9 @@ void build_transition_table(std::set<std::set<size_t>>         dstates,
     }
 }
 
-DFA regex_to_dfa(std::string pattern) {
-    // Remove syntactic sugar
-    desugar(pattern);
-
-    // Execute followpos
-    DFA                        dfa;
-    std::set<std::set<size_t>> dstates = {};
-    Transitions                dtran;
-    std::set<size_t>           initial_state_position;
-    std::set<std::set<size_t>> accepting_state_positions;
-    followpos(pattern, dfa.alphabet, initial_state_position, accepting_state_positions, dstates, dtran);
-
-    // Potentially find minimal DFA
-    // ...
-    // Probably not worth it for the llama.cpp common case
-
-    // Minimize memory usage of transition table
-    build_transition_table(dstates, dtran, dfa, initial_state_position, accepting_state_positions);
-
-    return dfa;
-}
-
-//
-// Runtime
-//
+// -----------------------------------------------------------------------------
+// Runtime matching internals
+// -----------------------------------------------------------------------------
 
 static bool advance_dfa(DFA & dfa, size_t & current_state, u_char character) {
     // TODO there might be a bug if `character` is outside the alphabet
@@ -896,6 +889,34 @@ static bool advance_dfas(DFA & dfa, std::list<size_t> & live_dfas, u_char charac
     return false;
 }
 
+// -----------------------------------------------------------------------------
+// Public API
+// -----------------------------------------------------------------------------
+
+// Init
+DFA regex_to_dfa(std::string pattern) {
+    // Remove syntactic sugar
+    desugar(pattern);
+
+    // Execute followpos
+    DFA                        dfa;
+    std::set<std::set<size_t>> dstates = {};
+    Transitions                dtran;
+    std::set<size_t>           initial_state_position;
+    std::set<std::set<size_t>> accepting_state_positions;
+    followpos(pattern, dfa.alphabet, initial_state_position, accepting_state_positions, dstates, dtran);
+
+    // Potentially find minimal DFA
+    // ...
+    // Probably not worth it for the llama.cpp common case
+
+    // Minimize memory usage of transition table
+    build_transition_table(dstates, dtran, dfa, initial_state_position, accepting_state_positions);
+
+    return dfa;
+}
+
+// Runtime
 bool feed(const std::string & tok, DFA & dfa, std::list<size_t> & live_dfas) {
     for (u_char character : tok) {
         if (advance_dfas(dfa, live_dfas, character)) {

@@ -407,7 +407,7 @@ static void test_annotate_epsilon() {  // (e)#
     auto                          root = cat(eps(), leaf(0, '#'));
     std::vector<std::set<size_t>> followpos(1);
 
-    regex_annotate(*root, followpos);
+    annotate(*root, followpos);
 
     CHECK(root->left_child->nullable);
     CHECK(root->left_child->firstpos.empty());
@@ -423,7 +423,7 @@ static void test_annotate_alternation() {  // (a|b)#
     auto                          root = cat(alt(leaf(0, 'a'), leaf(1, 'b')), leaf(2, '#'));
     std::vector<std::set<size_t>> followpos(3);
 
-    regex_annotate(*root, followpos);
+    annotate(*root, followpos);
 
     CHECK(!root->nullable);
     CHECK(root->firstpos == positions({ 0, 1 }));
@@ -438,7 +438,7 @@ static void test_annotate_concat_repetition() {  // (ab*)#
     auto                          root = cat(cat(leaf(0, 'a'), star(leaf(1, 'b'))), leaf(2, '#'));
     std::vector<std::set<size_t>> followpos(3);
 
-    regex_annotate(*root, followpos);
+    annotate(*root, followpos);
 
     CHECK(!root->nullable);
     CHECK(root->firstpos == positions({ 0 }));
@@ -453,7 +453,7 @@ static void test_annotate_star_of_alternation() {  // ((a|b)*)#
     auto                          root = cat(star(alt(leaf(0, 'a'), leaf(1, 'b'))), leaf(2, '#'));
     std::vector<std::set<size_t>> followpos(3);
 
-    regex_annotate(*root, followpos);
+    annotate(*root, followpos);
 
     CHECK(!root->nullable);
     CHECK(root->left_child->nullable);
