@@ -891,18 +891,18 @@ static bool advance_dfa(DFA & dfa, size_t & current_state, u_char character) {
     return false;  //advance failed (dead state)
 }
 
-static bool advance_dfas(DFA & dfa, std::list<size_t> & live_dfas, u_char character) {
-    live_dfas.push_back(dfa.initstate);
-    for (auto it = live_dfas.begin(); it != live_dfas.end();) {
+static bool advance_dfas(DFA & dfa, std::list<size_t> & live_paths, u_char character) {
+    live_paths.push_back(dfa.initstate);
+    for (auto it = live_paths.begin(); it != live_paths.end();) {
         size_t & current_state = *it;
         if (!advance_dfa(dfa, current_state, character)) {  //if advance fails kill this DFA
-            it = live_dfas.erase(it);
+            it = live_paths.erase(it);
         } else {
             ++it;
         }
     }
 
-    for (size_t state : live_dfas) {
+    for (size_t state : live_paths) {
         if (dfa.accepting.find(state) != dfa.accepting.end()) {
             return true;
         }
@@ -938,9 +938,9 @@ DFA regex_to_dfa(std::string pattern) {
 }
 
 // Runtime
-bool feed(const std::string & tok, DFA & dfa, std::list<size_t> & live_dfas) {
+bool feed(const std::string & tok, DFA & dfa, std::list<size_t> & live_paths) {
     for (u_char character : tok) {
-        if (advance_dfas(dfa, live_dfas, character)) {
+        if (advance_dfas(dfa, live_paths, character)) {
             return true;
         }
     }

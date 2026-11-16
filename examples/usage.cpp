@@ -21,10 +21,10 @@ int main() {
     std::string              pat     = "<tool_call>";
 
     regex_dfa::DFA    dfa = regex_dfa::regex_to_dfa(pat);
-    std::list<size_t> live_dfas;
+    std::list<size_t> live_paths;
 
     for (const std::string & tok : content) {
-        if (regex_dfa::feed(tok, dfa, live_dfas)) {
+        if (regex_dfa::feed(tok, dfa, live_paths)) {
             std::cout << "match found at token: " << tok << std::endl;
             break;
         }
