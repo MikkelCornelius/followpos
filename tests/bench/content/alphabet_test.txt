@@ -1,0 +1,12 @@
+"startABCDmiddlexxxx",
+"beginWXYZendxxxx",
+"startabcdmiddleyyyy",
+"begin1234endxxxx",
+"startEFGHmiddlexxxx",
+"beginQRSTendxxxx",
+"startIJKLmiddlexxxx",
+"beginMNOPendxxxx",
+"startUVWXmiddlexxxx",
+"beginABCDendxxxx",
+"startTESTmiddlexxxx",
+"beginWXYZendfinish"

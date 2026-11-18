@@ -34,16 +34,17 @@ int main() {
     patterns.insert(patterns.end(), { "(eval|exec)\\s*\\(", "(%3[Cc]|<)[sS][cC][rR][iI][pP][tT](%3[Ee]|>)" });
 
     // Custom language
-    files.insert(files.end(), { "long", "backtrack", "state_explosion", "alphabet_test", "alphabet_test_japanese" });
+    files.insert(files.end(), { "long", "backtrack", "state_explosion", "alphabet_test", "alphabet_test_japanese",
+                                "match_any_repeated" });
     patterns.insert(patterns.end(), { "(abcd|abce|abde|acde|bcde)(a|bc|de)(abc|abd|abe|acd|ace|ade)(bcd|bce|bde|cde)("
                                       "aab|aac|aad|aae|abb|abc|abd|abe)(de|ea|ab|bc)(abcde|abcda|abcdb|abcdc|abcde)",
                                       "(a|aa)+b", "(a|b)*a(a|b){7}", "(start[A-z]{4}middle|begin[A-z]{4}end)finish",
-                                      "(start[一-鿿]{4}middle|begin[一-鿿]{4}end)finish" });
+                                      "(start[一-鿿]{4}middle|begin[一-鿿]{4}end)finish", "(a|b)*bbb" });
 
     std::vector<std::string> content;
     std::string              pat;
     for (int i = 0; i < files.size(); i++) {
-        content = read_tokens(std::string("examples/content/") + files[i] + ".txt");
+        content = read_tokens(std::string("tests/bench/content/") + files[i] + ".txt");
         pat     = patterns[i];
 
         std::cout << "\n" << files[i] << std::endl;
