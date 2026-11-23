@@ -1,36 +1,86 @@
 # regex-dfa
 
-A small C++ library that compiles a regular expression into a DFA and exposes its internal structure, so the automaton can be stepped through one symbol at a time.
-
-> **Status:** work in progress. The API is not stable and most of it is not implemented yet.
+A C++17 library that compiles regular expressions into compact DFAs for incremental matching over byte sequences and UTF-8 text.
 
 ## Why
 
-Most regex engines are black boxes. They tell you whether a pattern matches, but not how, and they offer no way to customize the matching process. `std::regex`, for example, can only match against a complete string.
+Most regex engines are black boxes: they report whether an input matches, but do not expose the automaton used to get that result. This library constructs the DFA directly from the pattern and keeps the matching state available while input is streamed.
 
-This library builds the DFA directly from the pattern and keeps it accessible. That makes it possible to feed input incrementally (streaming) and inspect the current state at any point, such as which symbols are still allowed next.
+That is useful for constrained generation, incremental parsers, and applications that need to find a pattern across tokens rather than only in a complete string.
 
-The project started as a feature for [llama.cpp](https://github.com/ggml-org/llama.cpp), where constraining generation token by token needs exactly this kind of access, but it has no dependencies and can be used for anything. Naming and style follow llama.cpp conventions to make an eventual merge easy.
+The project originated as an experiment for [llama.cpp](https://github.com/ggml-org/llama.cpp), where a regular expression is evaluated one generated token at a time. It has no third-party runtime dependencies.
 
 ## How it works
 
-The algorithms implemented are based on the teachings of [Dragon Book](https://faculty.sist.shanghaitech.edu.cn/faculty/songfu/cav/Dragon-book.pdf), particularly chapter 3.9. The regex to DFA algorithm is refered to as `followpos` but is also known under the name `Glushkov`.
+The implementation follows the position/`followpos` construction described in [Compilers: Principles, Techniques, and Tools](https://faculty.sist.shanghaitech.edu.cn/faculty/songfu/cav/Dragon-book.pdf), chapter 3.9. This is also known as the Glushkov construction.
 
-The DFA is constructed directly from the syntax tree of the augmented pattern `(r)#`, using the `nullable`, `firstpos`, `lastpos` and `followpos` functions (the algorithm from the "Dragon Book"). No intermediate NFA is built. A DFA state is a set of positions in the pattern, and a state is accepting if it contains the position of the `#` end marker.
+The library builds the syntax tree for the augmented pattern `(r)#`, annotates nodes with `nullable`, `firstpos`, and `lastpos`, and computes `followpos`. It does not build an intermediate NFA. Each DFA state is represented by a set of syntax positions and is accepting when it contains the position of the `#` marker.
+
+The generated transition table uses packed `base`/`check`/`next_state` arrays. States are assigned numeric IDs, with state `0` reserved as the dead state.
+
+## Supported patterns
+
+- Concatenation and alternation: `ab`, `a|b`
+- Repetition: `a*`
+- Quantifiers: `a+`, `a?`, `a{n}`, `a{n,}`, `a{n,m}`
+- Parenthesized groups
+- Character classes and character ranges: `[abc]`, `[a-z]`, `[一-鿿]`
+- UTF-8 literals and ranges
+- Escape sequences for whitespace and literal characters
+- `\s`, `\f`, `\n`, `\r`, `\t`, `\v`, `\0`, `\cX`, and `\xHH`
+
+Some features are not implemented, including dot matches, negated and POSIX classes, anchors, non-greedy quantifiers, digit/word/whitespace shorthand classes, backreferences, lookarounds, and `\u` escapes. Unsupported constructs throw `std::logic_error`.
+
+## API
+
+The public header is `src/regex-to-dfa.h`. Compile a pattern and feed input one token or byte sequence at a time:
+
+```cpp
+#include "regex-to-dfa.h"
+
+#include <list>
+#include <string>
+
+regex_dfa::DFA dfa = regex_dfa::regex_to_dfa("<tool_call>");
+std::list<size_t> live_paths;
+
+bool matched = regex_dfa::feed("<tool_", dfa, live_paths);
+matched = regex_dfa::feed("call>", dfa, live_paths);
+```
+
+`feed()` restarts or continues its set of possible DFA paths for each call and returns `true` once an accepting state is reached. The example in `examples/usage.cpp` reads a token list and reports the first token containing a match.
 
 ## Building and testing
 
 Requires a C++17 compiler and CMake 3.14 or newer.
 
-```
+```sh
 make test
 ```
 
-This configures, builds, and runs the tests with CTest. Tests live in `tests/` and follow the `test-*.cpp` convention used by llama.cpp.
+This configures `build/` with benchmarks disabled, builds the library and tests, and runs CTest. Test coverage is in `tests/test-regex-dfa.cpp`.
+
+Run the usage example with:
+
+```sh
+make usage
+```
+
+## Benchmark
+
+An optional benchmark executable compares this implementation with `std::regex` and VectorScan. It is disabled by default and requires the bundled VectorScan sources/build and a discoverable `hs` library:
+
+```sh
+make benchmark
+```
+
+The benchmark runs isolated workers from `tests/bench/content/` for each engine and pattern.
 
 ## Layout
 
 ```
-src/     library sources and header
-tests/   test programs
+src/       library implementation and public header
+examples/  incremental-matching example
+tests/     unit tests and benchmark sources
+Makefile   test, usage, and benchmark targets
 ```
